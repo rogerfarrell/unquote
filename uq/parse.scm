@@ -52,17 +52,19 @@
       (error "define-tag: only block:block tags take #:wrap" name))
     (hash-set! registry name (list k address? wrap))))
 
+;; Both forms define the component procedure, register it with the parser,
+;; and export it from the module they appear in.
 (define-syntax define-tag              ; (define-tag kind (name . body) [#:wrap tag] …)
   (syntax-rules ()
     ((_ kind (name . body) #:wrap w expr ...)
-     (begin (define (name . body) expr ...) (register! 'name 'kind #f 'w)))
+     (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f 'w)))
     ((_ kind (name . body) expr ...)
-     (begin (define (name . body) expr ...) (register! 'name 'kind #f #f)))))
+     (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f #f)))))
 
 (define-syntax define-tag/address      ; (define-tag/address kind (name addr . body) …)
   (syntax-rules ()
     ((_ kind (name addr . body) expr ...)
-     (begin (define (name addr . body) expr ...) (register! 'name 'kind #t #f)))))
+     (begin (define (name addr . body) expr ...) (export name) (register! 'name 'kind #t #f)))))
 
 (define (oops line fmt . args)
   (error (string-append "line " (number->string line) ": " (apply format #f fmt args))))

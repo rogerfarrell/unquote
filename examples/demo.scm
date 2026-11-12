@@ -14,8 +14,9 @@
 ;;; You should have received a copy of the GNU General Public License
 ;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-;; demo.scm — markup inside an ordinary Scheme file
-(use-modules (uq parse) (uq tags) (sxml simple))
+;; demo.scm -- markup inside an ordinary Scheme file
+;;   guile -L . -L examples examples/demo.scm
+(use-modules (uq parse) (uq tags) (recipe tags) (sxml simple))
 (eval-when (expand load eval) (enable-markup-reader!))
 (set-port-encoding! (current-output-port) "UTF-8")
 

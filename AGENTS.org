@@ -20,18 +20,19 @@ Prefer moving complexity into components or the parser.
 | path               | contents                                                   |
 |--------------------+------------------------------------------------------------|
 | =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
-| =uq/tags.scm=      | the component set (recipe-card example)                    |
-| =unquote.scm=      | command-line renderer                                      |
+| =uq/tags.scm=      | generic components: structure, lists, inline markup        |
+| =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
-| =examples/=        | =recipe.cm= document, =demo.scm= markup embedded in Scheme |
+| =examples/recipe/= | =(recipe tags)= components and the =recipe.cm= document    |
+| =examples/demo.scm= | markup embedded in Scheme                                 |
 
 * Commands
 
 #+begin_src sh
-guile -L . tests/run.scm                          # must print "all tests passed"
-guile -L . unquote.scm examples/recipe.cm         # render
-guile -L . unquote.scm --expr examples/recipe.cm  # show intermediate Scheme on stderr
-guile -L . examples/demo.scm                      # embedding demo
+guile -L . -L examples tests/run.scm             # must print "all tests passed"
+guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.cm         # render
+guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.cm  # show intermediate Scheme on stderr
+guile -L . -L examples examples/demo.scm         # embedding demo
 #+end_src
 
 Use =--no-auto-compile= if stale compiled files in =~/.cache/guile= get in
@@ -50,7 +51,10 @@ the way.  Requires Guile 3.0.
 4. =parse-inline=: each run is parsed once, lines joined with newlines, for
    inline commands, brackets, addresses and =,(expr)= escapes.
 5. The result is one Scheme expression, =(document …)=.  It is evaluated in
-   the components' module and written with =sxml->xml=.
+   a module that uses the component modules and written with =sxml->xml=.
+
+The tag registry is global and filled when a component module loads, so
+component modules must be loaded before a document is parsed.
 
 * Invariants
 
@@ -68,6 +72,11 @@ the way.  Requires Guile 3.0.
 - Do not name a module =(unquote …)=.  =define-module= quasiquotes its
   arguments, so =(unquote parse)= is read as =,parse=.  The modules live
   under =(uq …)= for that reason.
+- Keep =(uq tags)= generic.  Components for a particular kind of page go in
+  their own module under =examples/= (or the user's project), using
+  =(uq parse)= and, for helpers such as =plain=, =(uq tags)=.
+- =define-tag= and =define-tag/address= export the component from the
+  module they appear in; do not add a separate export.
 - Components return SXML.  Empty non-void elements serialise as =<em />=,
   which browsers treat as an open tag; avoid producing them.
 
@@ -83,7 +92,7 @@ the way.  Requires Guile 3.0.
 
 - Add or update a case in =tests/run.scm= for every behaviour change, and
   run the tests before committing.
-- If the HTML for =examples/recipe.cm= changes, say why in the commit.
+- If the HTML for =examples/recipe/recipe.cm= changes, say why in the commit.
 - Keep the editor-facing rules in README.org in step with the parser.
 - New source files get the GPL-3.0-or-later header used in the existing
   files.

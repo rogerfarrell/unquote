@@ -31,17 +31,18 @@ GNU Guile 3.0 or later.  No other dependencies.
 
 * Usage
 
-Render a document:
+Render a document.  =--tags= adds a component module to the generic
+=(uq tags)=; =-L examples= puts the example modules on the load path:
 
 #+begin_src sh
-guile -L . unquote.scm examples/recipe.cm > recipe.html
-guile -L . unquote.scm --expr examples/recipe.cm   # also print the intermediate Scheme
+guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.cm > recipe.html
+guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.cm   # also print the intermediate Scheme
 #+end_src
 
 Run the tests:
 
 #+begin_src sh
-guile -L . tests/run.scm
+guile -L . -L examples tests/run.scm
 #+end_src
 
 * Editor syntax
@@ -103,8 +104,14 @@ component definitions.
 
 * Defining components
 
-Components live in a module such as =uq/tags.scm=.  Each is a procedure
-returning SXML, registered with a kind:
+=(uq tags)= provides the generic components: =document=, =p=, =ul=, =ol=,
+=li=, =em=, =strong=, =link=, =image= and =frac=.  Anything specific to a
+kind of page goes in a module of its own; =examples/recipe/tags.scm=
+defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
+=ingredients=, =directions= and =tip=.
+
+Each component is a procedure returning SXML, registered with a kind.
+=define-tag= also exports it from the module it appears in.
 
 | kind                    | placement   | content                                                     |
 |-------------------------+-------------+-------------------------------------------------------------|
@@ -130,7 +137,7 @@ holds everything up to the next blank line, nested blocks included.
 * Using markup inside Scheme
 
 #+begin_src scheme
-(use-modules (uq parse) (uq tags))
+(use-modules (uq parse) (uq tags) (recipe tags))
 
 (define jars 12)
 (define card

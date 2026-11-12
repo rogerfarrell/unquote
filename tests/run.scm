@@ -1,17 +1,18 @@
 ;;; SPDX-License-Identifier: GPL-3.0-or-later
 ;;; Copyright (C) 2026 Roger Farrell
 ;;;
-;;; Regression tests:  guile -L . tests/run.scm
+;;; Regression tests:  guile -L . -L examples tests/run.scm
+;;; Uses the generic (uq tags) and the example (recipe tags) components.
 ;;; Each case is markup -> expected HTML, or markup -> expected error text.
 
-(use-modules (uq parse) (uq tags) (sxml simple)
+(use-modules (uq parse) (uq tags) (recipe tags) (sxml simple)
              (ice-9 match) (srfi srfi-1))
 (set-port-encoding! (current-output-port) "UTF-8")
 
 (define (render str)
   (with-output-to-string
     (lambda () (for-each sxml->xml (eval `(list ,@(markup-string->exprs str))
-                                         (resolve-module '(uq tags)))))))
+                                         (current-module))))))
 
 (define (error-text str)
   (catch #t

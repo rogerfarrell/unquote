@@ -14,15 +14,39 @@
 ;;; You should have received a copy of the GNU General Public License
 ;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-;; unquote.scm — command-line renderer:  guile -L . unquote.scm [--expr] FILE
-(use-modules (uq parse) (uq tags) (ice-9 match) (ice-9 pretty-print) (sxml simple))
+;; unquote.scm -- command-line renderer
+;;
+;;   guile -L . unquote.scm [--expr] [--tags MODULE]... FILE
+;;
+;; The document is evaluated in a module that uses (uq tags) and each
+;; --tags module, later ones taking precedence; e.g.
+;;   guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.cm
+(use-modules (uq parse) (ice-9 match) (ice-9 pretty-print) (sxml simple))
 (fluid-set! %default-port-encoding "UTF-8")
 (set-port-encoding! (current-output-port) "UTF-8")
-(define (render file show?)
-  (let ((expr (call-with-input-file file read-markup-document)))
+
+(define (usage)
+  (format (current-error-port) "usage: unquote.scm [--expr] [--tags \"(MODULE NAME)\"]... FILE~%")
+  (exit 2))
+
+;; Load the component modules first: the parser needs their tags registered.
+(define (component-module specs)
+  (let ((m (make-fresh-user-module)))
+    (for-each (lambda (spec) (module-use! m (resolve-interface spec)))
+              (cons '(uq tags) specs))
+    m))
+
+(define (render file show? specs)
+  (let* ((env  (component-module specs))
+         (expr (call-with-input-file file read-markup-document)))
     (when show? (pretty-print expr (current-error-port)))
-    (sxml->xml (eval expr (resolve-module '(uq tags))))
+    (sxml->xml (eval expr env))
     (newline)))
-(match (command-line)
-  ((_ "--expr" file) (render file #t))
-  ((_ file) (render file #f)))
+
+(let loop ((args (cdr (command-line))) (show? #f) (specs '()))
+  (match args
+    (("--expr" . rest) (loop rest #t specs))
+    (("--tags" spec . rest)
+     (loop rest show? (append specs (list (call-with-input-string spec read)))))
+    ((file) (render file show? specs))
+    (_ (usage))))
