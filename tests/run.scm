@@ -5,13 +5,13 @@
 ;;; Uses the generic (uq tags) and the example (recipe tags) components.
 ;;; Each case is markup -> expected HTML, or markup -> expected error text.
 
-(use-modules (uq parse) (uq tags) (recipe tags) (sxml simple) (ice-9 textual-ports)
+(use-modules (uq parse) (uq tags) (uq compile) (recipe tags) (sxml simple) (ice-9 textual-ports)
              (ice-9 match) (srfi srfi-1))
 (set-port-encoding! (current-output-port) "UTF-8")
 
 (define (render str)
   (with-output-to-string
-    (lambda () (for-each sxml->xml (eval `(list ,@(markup-string->exprs str))
+    (lambda () (write-sxml (eval `(list ,@(markup-string->exprs str))
                                          (current-module))))))
 
 (define (error-text str)
@@ -146,6 +146,25 @@
  '((define-tag block:inline (x . b) #:wrap #f b)
    (define-tag block (x . b) #:wrap "td" b)
    (define-tag block (x . b) #:wrap () b)))
+
+;;; Tables by column: ,columns pivots ,column blocks into rows
+(html ",columns\n  ,column\n    ,th Ingredient\n\n    Pasta\n\n    Salt\n  ,column\n    ,th Amount\n\n    4 ,em[cups]\n\n    ,frac[1/2] tsp"
+      (string-append "<table><tr><th>Ingredient</th><th>Amount</th></tr>"
+                     "<tr><td>Pasta</td><td>4 <em>cups</em></td></tr>"
+                     "<tr><td>Salt</td><td>½ tsp</td></tr></table>"))
+(html ",columns\n  ,column\n    a\n\n    b\n  ,column\n    1"
+      "<table><tr><td>a</td><td>1</td></tr><tr><td>b</td><td></td></tr></table>")
+(html ",columns\n  ,column\n    Spices\n    ,ul\n      salt\n\n      pepper"
+      "<table><tr><td>Spices<ul><li>salt</li><li>pepper</li></ul></td></tr></table>")
+(html ",columns" "<table></table>")
+(fails "Intro.\n\n,columns\n  Oops\n  ,column\n    a" "line 3: ,columns holds only ,column blocks")
+(fails ",columns\n  ,tr\n    a" "line 1: ,columns holds only ,column blocks")
+
+;;; write-sxml closes empty non-void elements (browsers misread <td />)
+(check "write-sxml: empty elements"
+       (with-output-to-string (lambda () (write-sxml '(div (table) (br) (p (@ (class "x"))) (img (@ (src "a")))))))
+       "<div><table></table><br /><p class=\"x\"></p><img src=\"a\" /></div>")
+(html "a ,em[] b" "<p>a <em></em> b</p>")
 
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"

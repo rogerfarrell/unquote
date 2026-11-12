@@ -143,8 +143,10 @@ component modules must be loaded before a document is parsed.
   furniture (head, stylesheets, language): those belong in the build
   script's =#:page= procedure.  =write-html= adds a doctype only when the
   root is =html=.
-- Components return SXML.  Empty non-void elements serialise as =<em />=,
-  which browsers treat as an open tag; avoid producing them.
+- Components return SXML.  =sxml->xml= writes empty elements as =<x />=,
+  which browsers read as an open tag for non-void elements; =write-sxml=
+  therefore closes empty non-void elements (=<td></td>=).  Write HTML
+  through =write-sxml=/=write-html=, not =sxml->xml= directly.
 
 * Known issues
 

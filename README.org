@@ -112,6 +112,26 @@ lines and may hold a list.
 Text directly inside =,table=, outside any =,tr=, is not turned into a
 row; it produces invalid HTML.
 
+A table can also be written column by column, which =,columns= turns
+into rows.  Each =,column= is written like a =,tr=: blank lines separate
+its cells.  Short columns are padded with empty cells.
+
+#+begin_example
+,columns
+  ,column
+    ,th Ingredient
+
+    Pasta
+
+    Salt
+  ,column
+    ,th Amount
+
+    4 cups
+
+    ,frac[1/2] tsp
+#+end_example
+
 ** Inline commands
 - =,em[some words]= covers exactly the bracketed text.  Brackets nest and may
   span lines; balanced brackets inside are plain text.
@@ -153,9 +173,9 @@ component definitions.  =:name value= is there for the occasional case.
 
 * Defining components
 
-=(uq tags)= provides the generic components: =p=, =ul=, =ol=,
-=li=, =table=, =tr=, =td=, =th=, =em=, =strong=, =link=, =image= and
-=frac=.  Anything specific to a
+=(uq tags)= provides the generic components: =p=, =ul=, =ol=, =li=,
+=table=, =tr=, =td=, =th=, =columns=, =column=, =em=, =strong=, =link=,
+=image= and =frac=.  Anything specific to a
 kind of page goes in a module of its own; =examples/recipe/tags.scm=
 defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
 =ingredients=, =directions= and =tip=.

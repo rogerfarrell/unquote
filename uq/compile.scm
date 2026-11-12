@@ -156,10 +156,28 @@ siblings with no root element.  Errors are raised."
               (display close port)))))
       (sxml->xml node port)))
 
+;; sxml->xml writes an empty element as <x />.  HTML honours that only for
+;; void elements; browsers read <td /> or <table /> as an open tag.  So
+;; empty non-void elements get an empty string, which makes sxml->xml write
+;; <x></x>.
+(define void-tags '(area base br col embed hr img input link meta param source track wbr))
+
+(define (close-empty-elements x)
+  (cond ((element? x)
+         (call-with-values (lambda () (attributes+children x))
+           (lambda (attrs kids)
+             (let ((kids (map close-empty-elements kids)))
+               `(,(car x) ,@(if attrs (list attrs) '())
+                 ,@(if (and (null? kids) (not (memq (car x) void-tags))) '("") kids))))))
+        ((and (pair? x) (not (symbol? (car x)))) (map close-empty-elements x))   ; a list of nodes
+        (else x)))
+
 (define* (write-sxml sxml #:optional (port (current-output-port)) #:key (indent #f))
-  "Like sxml->xml, but with INDENT (#t for 2, or a number of spaces) put
-block structure on indented lines.  Text and inline markup are unchanged."
-  (let ((step (cond ((eq? indent #t) 2) ((integer? indent) indent) (else #f))))
+  "Like sxml->xml, but empty non-void elements are written <x></x>, and with
+INDENT (#t for 2, or a number of spaces) block structure goes on indented
+lines.  Text and inline markup are unchanged."
+  (let ((step (cond ((eq? indent #t) 2) ((integer? indent) indent) (else #f)))
+        (sxml (close-empty-elements sxml)))
     (if step
         (let ((nodes (node-list sxml)))
           (for-each (lambda (n i)

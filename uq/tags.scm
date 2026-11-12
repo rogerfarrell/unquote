@@ -42,6 +42,23 @@
 (define-tag block (td . body) #:wrap #f `(td ,@body))
 (define-tag block (th . body) #:wrap #f `(th ,@body))
 
+;;; tables by column: ,columns holds ,column blocks, each written like a
+;;; ,tr turned sideways, and pivots them into rows.  Short columns are
+;;; padded with empty cells.  A ,column returns a (column cell …) node that
+;;; only ,columns understands; outside one it gives a meaningless <column>.
+(define-tag block (column . cells) #:wrap (td th) `(column ,@cells))
+(define-tag block (columns . body)
+  (let* ((cols (map (match-lambda
+                      (('column . cells) cells)
+                      (_ (error ",columns holds only ,column blocks")))
+                    body))
+         (rows (apply max 0 (map length cols))))
+    `(table ,@(map (lambda (i)
+                     `(tr ,@(map (lambda (cells)
+                                   (if (< i (length cells)) (list-ref cells i) '(td)))
+                                 cols)))
+                   (iota rows)))))
+
 ;;; inline
 (define-tag inline (em . body)     `(em ,@body))
 (define-tag inline (strong . body) `(strong ,@body))
