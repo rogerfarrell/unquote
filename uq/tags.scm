@@ -37,9 +37,9 @@
 ;;; inline
 (define-tag inline (em . body)     `(em ,@body))
 (define-tag inline (strong . body) `(strong ,@body))
-(define-tag/address inline (link href . body)          ; no text: show the address
+(define-tag inline (link . body) #:address href          ; no text: show the address
   `(a (@ (href ,href)) ,@(if (null? body) (list href) body)))
-(define-tag/address inline (image src . alt) `(img (@ (src ,src) (alt ,(plain alt)))))
+(define-tag inline (image . alt) #:address src `(img (@ (src ,src) (alt ,(plain alt)))))
 (define-tag word (frac . body)
   (let ((s (plain body)))
     (or (assoc-ref '(("1/2" . "½") ("1/3" . "⅓") ("2/3" . "⅔") ("1/4" . "¼") ("3/4" . "¾")) s)

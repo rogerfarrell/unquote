@@ -24,7 +24,7 @@
 
 (define-tag block (recipe . body) `(div (@ (class "recipe")) ,@body))
 (define-tag block:inline (title . body) `(h1 ,@body))
-(define-tag/address block:inline (photo src . alt)
+(define-tag block:inline (photo . alt) #:address src
   `(figure (@ (class "photo")) (img (@ (src ,src) (alt ,(plain alt))))))
 (define-tag block:inline (yield . body) `(span (@ (class "yield")) "Yield: " ,@body))
 (define-tag block:inline (prep . body)  `(span (@ (class "prep")) "Prep time: " ,@body))

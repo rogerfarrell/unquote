@@ -65,7 +65,8 @@ component modules must be loaded before a document is parsed.
   Aliases are resolved in =register!=; code after registration only sees
   canonical names.
 - Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
-- Address commands read =[address]= first and an optional =[text]= second.
+- Address commands (=#:address var=) read =[address]= first and an optional
+  =[text]= second.
 - Parse errors are raised with =oops= and start with ="line N: "=.  Report
   the line where the problem starts (where a bracket opened, not where the
   run started).
@@ -77,7 +78,7 @@ component modules must be loaded before a document is parsed.
 - Keep =(uq tags)= generic.  Components for a particular kind of page go in
   their own module under =examples/= (or the user's project), using
   =(uq parse)= and, for helpers such as =plain=, =(uq tags)=.
-- =define-tag= and =define-tag/address= export the component from the
+- =define-tag= exports the component from the
   module they appear in; do not add a separate export.
 - Components return SXML.  Empty non-void elements serialise as =<em />=,
   which browsers treat as an open tag; avoid producing them.

@@ -17,7 +17,7 @@
 (define-module (uq parse)
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag define-tag/address markup enable-markup-reader!
+  #:export (define-tag markup enable-markup-reader!
             read-markup-document markup-string->exprs))
 
 ;;; ================= Component registry =================
@@ -52,19 +52,27 @@
       (error "define-tag: only block:block tags take #:wrap" name))
     (hash-set! registry name (list k address? wrap))))
 
-;; Both forms define the component procedure, register it with the parser,
-;; and export it from the module they appear in.
-(define-syntax define-tag              ; (define-tag kind (name . body) [#:wrap tag] …)
+;; (define-tag kind (name . body) [#:wrap tag | #:address var] expr …)
+;;
+;; Defines the component procedure, registers it with the parser, and
+;; exports it from the module it appears in.
+;;   #:wrap tag      block:block only: wrap each blank-line group in TAG
+;;   #:address var   the command takes [address][text]; the address is
+;;                   bound to VAR and BODY is the text, e.g.
+;;                     (define-tag inline (link . body) #:address href
+;;                       `(a (@ (href ,href)) ,@body))
+(define-syntax define-tag
   (syntax-rules ()
+    ((_ kind (name . body) #:wrap w #:address a expr ...)
+     (syntax-error "define-tag: use #:wrap or #:address, not both" name))
+    ((_ kind (name . body) #:address a #:wrap w expr ...)
+     (syntax-error "define-tag: use #:wrap or #:address, not both" name))
     ((_ kind (name . body) #:wrap w expr ...)
      (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f 'w)))
+    ((_ kind (name . body) #:address a expr ...)
+     (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t #f)))
     ((_ kind (name . body) expr ...)
      (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f #f)))))
-
-(define-syntax define-tag/address      ; (define-tag/address kind (name addr . body) …)
-  (syntax-rules ()
-    ((_ kind (name addr . body) expr ...)
-     (begin (define (name addr . body) expr ...) (export name) (register! 'name 'kind #t #f)))))
 
 (define (oops line fmt . args)
   (error (string-append "line " (number->string line) ": " (apply format #f fmt args))))

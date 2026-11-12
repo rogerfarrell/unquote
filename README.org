@@ -135,8 +135,11 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (ul . body) #:wrap li `(ul ,@body))
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
-(define-tag/address inline (link href . body) `(a (@ (href ,href)) ,@body))
+(define-tag inline       (link . body) #:address href `(a (@ (href ,href)) ,@body))
 #+end_src
+
+=#:address= makes a command take =[address][text]=: the address is bound
+to the named variable and =body= is the text.
 
 =#:wrap= names the tag each blank-line group is wrapped in.  The wrapper's
 own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
