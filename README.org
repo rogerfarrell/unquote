@@ -177,6 +177,18 @@ own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
 a run of text, and block lines stand on their own; a =block= wrapper (=li=)
 holds everything up to the next blank line, nested blocks included.
 
+Where a block has no =#:wrap=, and at the top level of a document, loose
+text goes in the /default wrapper/: the block tag declared with
+=#:default-wrap #t=.  =(uq tags)= declares =p=:
+
+#+begin_src scheme
+(define-tag block:inline (p . body) #:default-wrap #t `(p ,@body))
+#+end_src
+
+A project can declare another; the latest declaration wins.  If none is
+declared, loose text is an error with its line number.  The parser itself
+names no component.
+
 The two keywords combine, in either order.  A list that takes attributes:
 
 #+begin_src scheme

@@ -107,6 +107,25 @@
  '((define-tag block (x . b) #:attributes a #:required-attributes c b)
    (define-tag block (x . b) #:wrap li #:wrap p b)))
 
+;;; The default wrapper is declared (#:default-wrap), not built in
+(define saved-wrap (@@ (uq parse) default-wrap))
+(define (set-default-wrap! v) (module-set! (resolve-module '(uq parse)) 'default-wrap v))
+(check "(uq tags) declares p as the default wrapper" saved-wrap 'p)
+;; none declared: blocks still work, loose text is an error
+(set-default-wrap! #f)
+(fails ",ul\n  a\n\nLoose text" "line 4: text needs a wrapper, and none is declared (#:wrap or #:default-wrap)")
+(fails ",tip\n  Inside a tip" "line 2: text needs a wrapper, and none is declared (#:wrap or #:default-wrap)")
+(html ",ul\n  a" "<ul><li>a</li></ul>")
+;; a project may declare its own; the latest declaration wins
+(define-tag block:inline (para . body) #:default-wrap #t `(div (@ (class "para")) ,@body))
+(html "Hello ,em[there]" "<div class=\"para\">Hello <em>there</em></div>")
+(set-default-wrap! saved-wrap)
+(check "define-tag rejects #:default-wrap on an inline tag"
+       (catch #t (lambda () (eval '(define-tag inline (x . b) #:default-wrap #t b) (current-module)) #f)
+         (lambda _ #t))
+       #t)
+(html "back to p" "<p>back to p</p>")
+
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
       "<p><a href=\"https://example.com\" title=\"Jar sizes for every recipe\">jars</a></p>")

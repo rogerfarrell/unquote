@@ -43,21 +43,32 @@
 (define (kind-of name)  (and=> (entry name) car))
 (define (attributes? name) (and=> (entry name) cadr))   ; optional or required
 (define (attributes-required? name) (eq? (attributes? name) 'required))
-(define (wrap-of name)  (or (and=> (entry name) caddr) 'p))
+;; The wrapper for loose text where a block:block has no #:wrap of its own,
+;; and at the top level of a document.  Declared by a tag with
+;; #:default-wrap #t -- (uq tags) declares p -- the latest declaration
+;; winning.  The parser names no component itself.
+(define default-wrap #f)
+(define (wrap-of name)  (or (and=> (entry name) caddr) default-wrap))
 
-(define (register! name kind attributes wrap)
+(define (register! name kind attributes wrap default?)
   (let ((k (canonical-kind kind)))
     (unless (memq k (append block-kinds inline-kinds))
       (error "define-tag: unknown kind" kind))
     (when (and wrap (not (eq? k 'block:block)))
       (error "define-tag: only block:block tags take #:wrap" name))
-    (hash-set! registry name (list k attributes wrap))))
+    (when (and default? (not (memq k block-kinds)))
+      (error "define-tag: only block tags can be the #:default-wrap" name))
+    (hash-set! registry name (list k attributes wrap))
+    (when default? (set! default-wrap name))))
 
 ;; (define-tag kind (name . body) [option …] expr …)
 ;;
 ;; Defines the component procedure, registers it with the parser, and
 ;; exports it from the module it appears in.  Options, in any order:
 ;;   #:wrap tag                 block:block only: wrap each blank-line group in TAG
+;;   #:default-wrap #t          this block tag wraps loose text wherever no
+;;                              #:wrap says otherwise, including the top
+;;                              level of a document; (uq tags) declares p
 ;;   #:attributes var           the command may take [attributes][text]; the
 ;;                              brackets can be left out, giving no attributes
 ;;   #:required-attributes var  the same, but the attribute bracket must be
@@ -72,32 +83,36 @@
 (define-syntax define-tag
   (syntax-rules ()
     ((_ kind (name . body) . rest)
-     (define-tag/options kind name body #f #f #f rest))))
+     (define-tag/options kind name body #f #f #f #f rest))))
 
 ;; Collects the options, then defines.  W: wrap tag or #f; A: the attribute
-;; variable or #f; M: optional, required or #f.
+;; variable or #f; M: optional, required or #f; D: default wrapper?
 (define-syntax define-tag/options
   (syntax-rules ()
-    ((_ k n b w #f m (#:attributes a . rest))
-     (define-tag/options k n b w a optional rest))
-    ((_ k n b w #f m (#:required-attributes a . rest))
-     (define-tag/options k n b w a required rest))
-    ((_ k n b w a m (#:attributes . rest))
+    ((_ k n b w #f m d (#:attributes a . rest))
+     (define-tag/options k n b w a optional d rest))
+    ((_ k n b w #f m d (#:required-attributes a . rest))
+     (define-tag/options k n b w a required d rest))
+    ((_ k n b w a m d (#:attributes . rest))
      (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
-    ((_ k n b w a m (#:required-attributes . rest))
+    ((_ k n b w a m d (#:required-attributes . rest))
      (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
-    ((_ k n b #f a m (#:wrap w . rest))
-     (define-tag/options k n b w a m rest))
-    ((_ k n b w a m (#:wrap . rest))
+    ((_ k n b #f a m d (#:wrap w . rest))
+     (define-tag/options k n b w a m d rest))
+    ((_ k n b w a m d (#:wrap . rest))
      (syntax-error "define-tag: #:wrap given twice" n))
-    ((_ k n b #f #f #f (expr ...))
-     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f #f)))
-    ((_ k n b w #f #f (expr ...))
-     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f 'w)))
-    ((_ k n b #f a m (expr ...))
-     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm #f)))
-    ((_ k n b w a m (expr ...))
-     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm 'w)))))
+    ((_ k n b w a m #f (#:default-wrap d . rest))
+     (define-tag/options k n b w a m d rest))
+    ((_ k n b w a m d (#:default-wrap . rest))
+     (syntax-error "define-tag: #:default-wrap given twice" n))
+    ((_ k n b #f #f #f d (expr ...))
+     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f #f d)))
+    ((_ k n b w #f #f d (expr ...))
+     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f 'w d)))
+    ((_ k n b #f a m d (expr ...))
+     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm #f d)))
+    ((_ k n b w a m d (expr ...))
+     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm 'w d)))))
 
 (define (oops line fmt . args)
   (error (string-append "line " (number->string line) ": " (apply format #f fmt args))))
@@ -344,10 +359,20 @@
 
 ;; KIDS of a block:block, grouped by blank lines and wrapped in WRAP.
 (define (convert-children kids wrap)
-  (case (kind-of wrap)
-    ((block:inline) (inline-groups kids wrap))
-    ((block:block)  (block-groups kids wrap))
-    (else (error (format #f "#:wrap ~a must be a block:block or block:inline tag" wrap)))))
+  (if (not wrap)
+      (unwrapped kids)
+      (case (kind-of wrap)
+        ((block:inline) (inline-groups kids wrap))
+        ((block:block)  (block-groups kids wrap))
+        (else (error (format #f "#:wrap ~a must be a block:block or block:inline tag" wrap))))))
+
+;; no wrapper at all: blocks are fine, loose text is an error
+(define (unwrapped kids)
+  (filter-map (lambda (k)
+                (cond ((blank? k) #f)
+                      ((block-head k) (convert-block k))
+                      (else (oops (node-line k) "text needs a wrapper, and none is declared (#:wrap or #:default-wrap)"))))
+              kids))
 
 ;; wrapper holds only text (p): a run of text lines per group; block lines
 ;; and blank lines end the run, and blocks stand on their own
@@ -419,14 +444,14 @@
           (call name addr (convert-children kids (wrap-of name)))))))))
 
 ;; A document has no root element: its top-level blocks are siblings.
-(define (tree->expr root) `(list ,@(convert-children (node-kids root) 'p)))
+(define (tree->expr root) `(list ,@(convert-children (node-kids root) default-wrap)))
 
 ;;; ================= Entry points =================
 ;; whole document -> one expression, (list …): a list of sibling nodes
 (define (read-markup-document port) (tree->expr (port->tree port)))
 ;; fragment -> list of expressions, one per top-level node
 (define (markup-string->exprs str)
-  (convert-children (node-kids (call-with-input-string str port->tree)) 'p))
+  (convert-children (node-kids (call-with-input-string str port->tree)) default-wrap))
 
 ;; (markup "…")  expands at compile time into ordinary Scheme:
 ;;   (list (p "text " (em "x")) (ul (li …)) …)

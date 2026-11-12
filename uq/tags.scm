@@ -28,7 +28,7 @@
 (define (plain body) (string-trim-both (apply string-append (filter string? body))))
 
 ;;; structure
-(define-tag block:inline (p . body) `(p ,@body))
+(define-tag block:inline (p . body) #:default-wrap #t `(p ,@body))   ; wraps loose text
 (define-tag block (ul . body) #:wrap li `(ul ,@body))
 (define-tag block (ol . body) #:wrap li `(ol ,@body))
 (define-tag block (li . body) `(li ,@body))

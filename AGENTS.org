@@ -66,6 +66,14 @@ component modules must be loaded before a document is parsed.
   =inline:inline= (alias =inline=) and =inline:word= (alias =word=).
   Aliases are resolved in =register!=; code after registration only sees
   canonical names.
+- The parser and compiler must not name components or validate a
+  particular one.  Behaviour comes from declarations: kinds, =#:wrap=,
+  =#:default-wrap=, the attribute options.  Checks that concern one
+  component live in that component.
+- The default wrapper (for loose text where no =#:wrap= applies, and at
+  the top level) is whichever block tag was last declared with
+  =#:default-wrap #t=; =(uq tags)= declares =p=.  With none, loose text
+  is a parse error.
 - Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
   =#:wrap= combines with either attributes option, in any order.
 - =#:attributes var=: optional; without brackets the command gets ='()=,
