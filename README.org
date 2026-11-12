@@ -86,6 +86,8 @@ guile -L . tests/run.scm
   span lines; balanced brackets inside are plain text.
 - Without brackets an inline command takes the rest of the line
   (=,em Optional:=), and a word command takes the next word (=,frac 1/2=).
+  Either way, punctuation touching the text is included: write
+  =,frac[1/2],= when a comma or period follows.
 - A =[= that does not directly follow a command name is plain text, so
   =[sic]= is safe.
 

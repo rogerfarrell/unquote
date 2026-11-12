@@ -41,6 +41,10 @@
 (html "Place in a jar.\n,em Optional:\nVacuum seal." "<p>Place in a jar. <em>Optional:</em> Vacuum seal.</p>")
 (html "a ,em b ,strong c d\ne" "<p>a <em>b <strong>c d</strong></em> e</p>")
 (html "a ,frac 1/2 b ,frac 3/8 c" "<p>a ½ b <span class=\"frac\"><sup>3</sup>⁄<sub>8</sub></span> c</p>")
+;; a word tag takes everything up to whitespace, punctuation included;
+;; brackets are the way to leave punctuation outside
+(html "add ,frac[1/2], then stir" "<p>add ½, then stir</p>")
+(html "use ,strong[salt]. Then" "<p>use <strong>salt</strong>. Then</p>")
 
 ;;; Brackets
 (html "a ,em[x [y] z] w" "<p>a <em>x [y] z</em> w</p>")
