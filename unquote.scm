@@ -20,7 +20,7 @@
 ;;
 ;; The document is evaluated in a module that uses (uq tags) and each
 ;; --tags module, later ones taking precedence; e.g.
-;;   guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.cm
+;;   guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.uq
 (use-modules (uq parse) (ice-9 match) (ice-9 pretty-print) (sxml simple))
 (fluid-set! %default-port-encoding "UTF-8")
 (set-port-encoding! (current-output-port) "UTF-8")

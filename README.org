@@ -35,8 +35,8 @@ Render a document.  =--tags= adds a component module to the generic
 =(uq tags)=; =-L examples= puts the example modules on the load path:
 
 #+begin_src sh
-guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.cm > recipe.html
-guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.cm   # also print the intermediate Scheme
+guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.uq > recipe.html
+guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.uq   # also print the intermediate Scheme
 #+end_src
 
 Run the tests:

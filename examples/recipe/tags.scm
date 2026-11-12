@@ -16,7 +16,7 @@
 
 ;;; (recipe tags) -- supplementary components for one-page recipe cards.
 ;;; Load alongside (uq tags):
-;;;   guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.cm
+;;;   guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.uq
 
 (define-module (recipe tags)
   #:use-module (uq parse)
