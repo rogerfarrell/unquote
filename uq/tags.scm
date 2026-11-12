@@ -64,12 +64,12 @@
 (define-tag inline (strong . body) `(strong ,@body))
 ;; ,link[url][text] or ,link[:href url :title Hint][text]; no text shows the URL
 (define-tag inline (link . body) #:required-attributes attrs
-  (let ((href (main-attribute attrs 'href 'link)))
+  (let ((href (main-attribute attrs 'href)))
     `(a (@ (href ,href) ,@(attribute-list attrs '(href)))
         ,@(if (null? body) (list href) body))))
 ;; ,image[file][alt] or ,image[:src file :width 40][alt]
 (define-tag inline (image . alt) #:required-attributes attrs
-  `(img (@ (src ,(main-attribute attrs 'src 'image)) (alt ,(plain alt))
+  `(img (@ (src ,(main-attribute attrs 'src)) (alt ,(plain alt))
            ,@(attribute-list attrs '(src alt)))))
 (define-tag word (frac . body)
   (let ((s (plain body)))

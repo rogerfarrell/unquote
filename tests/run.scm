@@ -166,6 +166,18 @@
        "<div><table></table><br /><p class=\"x\"></p><img src=\"a\" /></div>")
 (html "a ,em[] b" "<p>a <em></em> b</p>")
 
+;;; current-command: the command the editor wrote, for messages
+(define-tag inline (whoami . body) `(code ,(symbol->string (current-command))))
+(html "a ,whoami[] b" "<p>a <code>whoami</code> b</p>")
+(html "a ,em[,(symbol->string (current-command))] b" "<p>a <em>em</em> b</p>")
+;; a component that calls another directly: errors name the outer command
+(define-tag inline (email . body) #:required-attributes attrs (apply link attrs body))
+(fails "a\n\nb ,email[a b][x]" "line 3: ,email takes one href; quote it if it has spaces")
+(check "main-attribute: an explicit command name still wins"
+       (catch #t (lambda () (main-attribute '() 'src 'custom) #f)
+         (lambda (k . a) (uq-error-message k a)))
+       ",custom needs its src: as the first word or as :src")
+
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
       "<p><a href=\"https://example.com\" title=\"Jar sizes for every recipe\">jars</a></p>")

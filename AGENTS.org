@@ -106,11 +106,14 @@ component modules must be loaded before a document is parsed.
   arguments.
 - Errors that know their line are raised under the key =uq-error= (via
   =oops= or =located=).  The parser wraps every component call and
-  =,(expr)= in =((@ (uq parse) at-line) LINE (lambda () …))= with =call=
+  =,(expr)= in =((@ (uq parse) at-line) LINE NAME (lambda () …))= with =call=
   or =wrap-line=; =at-line= turns any other error into a =uq-error= with
   that line, and lets =uq-error= through, so the innermost line wins.
   New code that emits a call must go through =call= so it gets a line.
   =strip-line-wrappers= removes the wrappers for display (=--expr=).
+- =at-line= also sets the =current-command= parameter to NAME (escapes pass
+  #f and keep the enclosing one), so components and =main-attribute= can
+  name the command in messages without being told.
 - Markup embedded in Scheme reports the Scheme file's lines: the =markup=
   macro takes them from =syntax-source=, the =#m= reader passes line and
   file explicitly, and =markup-string->exprs= sets =current-uq-file= so

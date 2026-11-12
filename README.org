@@ -197,7 +197,7 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
 (define-tag inline       (link . body) #:required-attributes attrs
-  (let ((href (main-attribute attrs 'href 'link)))   ; :href or the one plain word
+  (let ((href (main-attribute attrs 'href)))         ; :href or the one plain word
     `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
 
@@ -212,11 +212,16 @@ and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 =(@ …)=.  So =[jar.jpg :width 3in]= gives =("jar.jpg" (width "3in"))=, and
 =body= is the text.  Helpers from =(uq parse)=:
 
-- =(main-attribute attrs 'name 'command)= — a command's main value, given
-  as =:name= or as the one plain word.  Missing, given both ways, or given
-  as several plain words is an error naming the command, with its line:
+- =(main-attribute attrs 'name)= — a command's main value, given as
+  =:name= or as the one plain word.  Missing, given both ways, or given as
+  several plain words is an error naming the command, with its line:
   =,link takes one href; quote it if it has spaces=.  =link=, =image=,
   =photo= and =qr= use it.
+- =(current-command)= — the command being evaluated, as the editor wrote
+  it, for a component's own messages.  =main-attribute= uses it by default
+  (an explicit third argument overrides it).  A component that calls
+  another directly leaves it unchanged, so errors name what the editor
+  typed: an =,email= built on =link= reports =,email …=.
 - =(attribute attrs 'name [n])= — the value of =:name=, else the /n/th
   plain word, else =#f=.
 - =(attribute-values attrs)= — the plain words.

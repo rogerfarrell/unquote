@@ -17,7 +17,7 @@
 (define-module (uq parse)
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 textual-ports) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag attribute attribute-values attribute-list main-attribute markup enable-markup-reader!
+  #:export (define-tag attribute attribute-values attribute-list main-attribute current-command markup enable-markup-reader!
             read-markup-document markup-string->exprs
             at-line strip-line-wrappers uq-error-message))
 
@@ -168,26 +168,34 @@
     (_ (fallback))))
 
 ;; The parser wraps every component call and ,(expr) escape in
-;;   ((@ (uq parse) at-line) LINE (lambda () EXPR))
+;;   ((@ (uq parse) at-line) LINE NAME (lambda () EXPR))
 ;; so an error raised while evaluating it -- a component's own check, or a
 ;; failing escape -- is reported with the line it came from.  An error that
 ;; already has a line passes through, so the innermost line wins.
-(define (at-line line thunk)
+;; The command whose component is running, as the editor wrote it: set by
+;; at-line around each command, so a component -- and helpers such as
+;; main-attribute -- can name it in messages.  A component calling another
+;; directly does not change it: errors name the command the editor typed.
+(define current-command (make-parameter #f))
+
+;; NAME is the command's name, or #f for a ,(expr) escape (which keeps the
+;; enclosing command's).
+(define (at-line line name thunk)
   (catch #t
-    thunk
+    (if name (lambda () (parameterize ((current-command name)) (thunk))) thunk)
     (lambda (key . args)
       (if (memq key '(uq-error quit))
           (apply throw key args)
           (located line (uq-error-message key args))))))
 
-(define (wrap-line line expr)
+(define* (wrap-line line expr #:optional name)
   (let ((loc (if (current-uq-file) (cons (current-uq-file) line) line)))
-    `((@ (uq parse) at-line) ',loc (lambda () ,expr))))
+    `((@ (uq parse) at-line) ',loc ',name (lambda () ,expr))))
 
 (define (strip-line-wrappers x)
   "X without the at-line wrappers, for showing the expression to people."
   (match x
-    ((('@ ('uq 'parse) 'at-line) _ ('lambda () expr)) (strip-line-wrappers expr))
+    ((('@ ('uq 'parse) 'at-line) _ _ ('lambda () expr)) (strip-line-wrappers expr))
     ((? pair?) (cons (strip-line-wrappers (car x)) (strip-line-wrappers (cdr x))))
     (_ x)))
 
@@ -289,10 +297,11 @@
            (let ((bare (filter string? attrs)))
              (and (< index (length bare)) (list-ref bare index))))))
 
-(define (main-attribute attrs key command)
+(define* (main-attribute attrs key #:optional (command (current-command)))
   "A command's main value: given as :KEY, or as the one plain word in ATTRS.
 Missing, given both ways, or given as several plain words is an error
-naming COMMAND (raised while evaluating, so it carries the line)."
+naming COMMAND -- by default the command being evaluated -- and raised
+while evaluating, so it carries the line."
   (match (list (attribute attrs key) (attribute-values attrs))
     ((#f (word)) word)
     (((? string? value) ()) value)
@@ -388,7 +397,7 @@ naming COMMAND (raised while evaluating, so it carries the line)."
 (define (line-at s i line) (+ line (string-count (substring s 0 i) #\newline)))
 ;; ATTRS is #f for commands without attributes; otherwise a quoted list.
 (define (call name attrs parts line)
-  (wrap-line line `(,name ,@(if attrs `(',attrs) '()) ,@parts)))
+  (wrap-line line `(,name ,@(if attrs `(',attrs) '()) ,@parts) name))
 
 (define (parse-inline s line)
   (let loop ((i 0) (start 0) (acc '()))
@@ -541,7 +550,7 @@ naming COMMAND (raised while evaluating, so it carries the line)."
 (define (join-inline-groups groups)
   (define (inline? x)                     ; a string, inline call or escape
     (match x
-      ((('@ ('uq 'parse) 'at-line) _ ('lambda () (name . _)))
+      ((('@ ('uq 'parse) 'at-line) _ _ ('lambda () (name . _)))
        (not (and (symbol? name) (memq (kind-of name) block-kinds))))
       (_ #t)))
   (let loop ((groups (remove null? groups)) (out '()))

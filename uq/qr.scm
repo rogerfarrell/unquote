@@ -61,7 +61,7 @@
           (path (@ (d ,d) (fill "#000"))))))
 
 (define-tag inline (qr . label) #:required-attributes attrs
-  (let* ((data (main-attribute attrs 'data 'qr))
+  (let* ((data (main-attribute attrs 'data))
          (name (string-downcase (or (attribute attrs 'ecc) "low")))
          (ecc  (or (assoc-ref ecc-levels name)
                    (error (format #f ",qr: :ecc is low, medium, quartile or high, not ~a" name)))))
