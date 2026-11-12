@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-exec guile --no-auto-compile -s "$0" "$@"
+exec guile --no-auto-compile -e main -s "$0" "$@"
 !#
 ;;; SPDX-License-Identifier: GPL-3.0-or-later
 ;;; Copyright (C) 2026 Roger Farrell
@@ -72,10 +72,12 @@ exec guile --no-auto-compile -s "$0" "$@"
         (newline port)))
     (format #t "~a -> ~a~%" in out)))
 
-(match (command-line)
-  ((_)            (compile-uq (string-append here "/recipe.uq") (string-append here "/recipe.html")))
-  ((_ in)         (compile-uq in (string-append (if (string-suffix? ".uq" in)
-                                                    (string-drop-right in 3) in)
-                                                ".html")))
-  ((_ in out)     (compile-uq in out))
-  (_ (format (current-error-port) "usage: build.scm [INPUT.uq [OUTPUT.html]]~%") (exit 2)))
+;; Entry point, called by the -e main in the header with (command-line).
+(define (main args)
+  (match args
+    ((_)        (compile-uq (string-append here "/recipe.uq") (string-append here "/recipe.html")))
+    ((_ in)     (compile-uq in (string-append (if (string-suffix? ".uq" in)
+                                                  (string-drop-right in 3) in)
+                                              ".html")))
+    ((_ in out) (compile-uq in out))
+    (_ (format (current-error-port) "usage: build.scm [INPUT.uq [OUTPUT.html]]~%") (exit 2))))
