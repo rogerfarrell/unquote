@@ -188,7 +188,9 @@ written as a fragment.  INDENT is passed to write-sxml."
      (format #f "~a ~s" (string-trim-right msg #\,) form))
     ;; error, misc-error and friends: (who format-string format-args . _)
     ((_ _ (? string? fmt) (? list? fargs) . _)
-     (catch #t (lambda () (apply format #f fmt fargs)) (lambda _ (fallback))))
+     ;; Guile's error messages are simple-format strings (~a, ~s); unlike
+     ;; format, simple-format raises on a mismatch without printing anything
+     (catch #t (lambda () (apply simple-format #f fmt fargs)) (lambda _ (fallback))))
     (_ (fallback))))
 
 (define (default-output in)
