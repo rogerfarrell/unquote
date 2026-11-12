@@ -147,8 +147,8 @@ so only render documents you trust, or evaluate them in a restricted module.
 * AI disclosure
 
 Most of the code, tests and documentation in this repository were written by
-Claude, an AI model made by Anthropic, working interactively with Roger
-Farrell.  Roger set the goals and made the design decisions (the comma
+Claude, an AI model made by Anthropic, working interactively with the
+project's author.  The author set the goals and made the design decisions (the comma
 syntax, indentation for children, address-first brackets, the kinds and
 =#:wrap=); Claude proposed alternatives, wrote the implementation and ran
 the tests.  The code has not had an independent line-by-line human review.
