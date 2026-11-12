@@ -25,7 +25,8 @@
 ;; name -> (kind attributes wrap), attributes being #f, optional or required
 ;; Kinds are  placement:content.
 ;;   block:block   (alias block)   starts a line; holds blank-line-separated groups,
-;;                                 each wrapped in the tag's #:wrap (default p)
+;;                                 each wrapped per the tag's #:wrap, else the
+;;                                 declared #:default-wrap
 ;;   block:inline                  starts a line; holds one run of inline content
 ;;   inline:inline (alias inline)  mid-line; without [brackets] runs to end of line
 ;;   inline:word   (alias word)    mid-line; without [brackets] takes the next word
@@ -100,7 +101,7 @@
 ;; parse-attributes) and BODY is the text -- or, for a block, its contents.
 ;; For example:
 ;;   (define-tag inline (link . body) #:required-attributes attrs
-;;     (let ((href (attribute attrs 'href 0)))
+;;     (let ((href (main-attribute attrs 'href)))
 ;;       `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
   (syntax-rules ()
