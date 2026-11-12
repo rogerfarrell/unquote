@@ -102,6 +102,12 @@ component modules must be loaded before a document is parsed.
   that line, and lets =uq-error= through, so the innermost line wins.
   New code that emits a call must go through =call= so it gets a line.
   =strip-line-wrappers= removes the wrappers for display (=--expr=).
+- Markup embedded in Scheme reports the Scheme file's lines: the =markup=
+  macro takes them from =syntax-source=, the =#m= reader passes line and
+  file explicitly, and =markup-string->exprs= sets =current-uq-file= so
+  messages name the file.  =compile-uq= leaves it unset and adds the file
+  name itself.  =uq-error= has an exception printer, so uncaught errors
+  show the message.
 - Find the end of a datum read from a string with =read-datum-at=, not
   =ftell=: string ports count bytes, so =ftell= is wrong after non-ASCII.
 - Parse errors are raised with =oops= and start with ="line N: "=.  Report

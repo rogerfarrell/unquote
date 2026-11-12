@@ -304,8 +304,9 @@ parentheses?)=.  An error /while evaluating/ an escape -- or raised by a
 component, such as =photo='s check for a file -- is reported with the
 line it came from too: =recipe.uq: line 7: ,photo needs a file: …=.  The
 parser wraps every component call and escape so that it can; =--expr=
-shows the expression without those wrappers.  Inside the =markup= macro,
-lines count from the start of the markup string.
+shows the expression without those wrappers.  Markup embedded in a Scheme
+file with =markup= or =#m<<END= reports that file and its lines:
+=site.scm: line 12: …=.
 
 ** Trust
 An escape can run any Scheme code with the permissions of whoever builds

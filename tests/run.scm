@@ -170,6 +170,37 @@
        (map strip-line-wrappers (markup-string->exprs "a ,em[b] ,(+ 1 2)"))
        '((p "a " (em "b") " " (+ 1 2))))
 
+;;; Markup embedded in a Scheme file reports that file and its lines
+(let* ((dir  (string-append (or (getenv "TMPDIR") "/tmp") "/uq-embed-" (number->string (getpid))))
+       (file (string-append dir "/embedded.scm"))
+       (out  (string-append dir "/out")))
+  (mkdir dir)
+  (call-with-output-file file
+    (lambda (p)
+      (display (string-append
+                "(use-modules (uq parse) (uq tags))\n"                    ; 1
+                "(eval-when (expand load eval) (enable-markup-reader!))\n" ; 2
+                "(define (try thunk)\n"                                    ; 3
+                "  (catch #t thunk (lambda (k . a) (display (uq-error-message k a)) (newline))))\n"
+                "(try (lambda () (markup \"x ,(car '()) y\")))\n"          ; 5
+                "(try (lambda ()\n"                                        ; 6
+                "  (markup\n"                                              ; 7
+                "   \"first\n"                                            ; 8
+                "second ,(car '())\")))\n"                                ; 9
+                "(try (lambda () #m<<END\n"                                ; 10
+                "one\n"                                                    ; 11
+                "two ,(vector-ref (vector) 0)\n"                           ; 12
+                "END\n"
+                "))\n")
+               p)))
+  (with-output-to-file out (lambda () (load file)))
+  (let ((lines (string-split (string-trim-right (call-with-input-file out get-string-all)) #\newline)))
+    (check "embedded: three errors reported" (length lines) 3)
+    (for-each (lambda (line want)
+                (check (string-append "embedded: " want) (string-prefix? (string-append file ": " want) line) #t))
+              lines '("line 5: " "line 9: " "line 12: ")))
+  (delete-file file) (delete-file out) (rmdir dir))
+
 ;;; uq-error-message never fails on an unusual error shape
 (use-modules (uq compile))
 (check "uq-error-message: syntax error"

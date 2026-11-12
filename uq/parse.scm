@@ -119,9 +119,20 @@
 ;; Every error that knows its line is raised under the key uq-error, as
 ;; (uq-error #f "~a" ("line N: message") #f) -- the shape of misc-error, so
 ;; anything that formats Guile errors formats these too.
+;; The file being parsed, when the message should name it (markup embedded
+;; in a Scheme file).  compile-uq names the file itself, so leaves it #f.
+(define current-uq-file (make-parameter #f))
+
+;; LINE is a line number, or (FILE . LINE) baked in by wrap-line.
+(define (location line)
+  (let ((file (if (pair? line) (car line) (current-uq-file)))
+        (n    (if (pair? line) (cdr line) line)))
+    (if file
+        (format #f "~a: line ~a: " file n)
+        (format #f "line ~a: " n))))
+
 (define (located line message)
-  (scm-error 'uq-error #f "~a"
-             (list (string-append "line " (number->string line) ": " message)) #f))
+  (scm-error 'uq-error #f "~a" (list (string-append (location line) message)) #f))
 
 (define (oops line fmt . args) (located line (apply format #f fmt args)))
 
@@ -152,7 +163,9 @@
           (apply throw key args)
           (located line (uq-error-message key args))))))
 
-(define (wrap-line line expr) `((@ (uq parse) at-line) ,line (lambda () ,expr)))
+(define (wrap-line line expr)
+  (let ((loc (if (current-uq-file) (cons (current-uq-file) line) line)))
+    `((@ (uq parse) at-line) ',loc (lambda () ,expr))))
 
 (define (strip-line-wrappers x)
   "X without the at-line wrappers, for showing the expression to people."
@@ -160,6 +173,10 @@
     ((('@ ('uq 'parse) 'at-line) _ ('lambda () expr)) (strip-line-wrappers expr))
     ((? pair?) (cons (strip-line-wrappers (car x)) (strip-line-wrappers (cdr x))))
     (_ x)))
+
+;; Show uq errors as their message, not "Throw to key `uq-error' …".
+(set-exception-printer! 'uq-error
+  (lambda (port key args default-printer) (display (uq-error-message key args) port)))
 
 ;;; ================= Lines -> indentation tree =================
 (define-record-type <node>
@@ -170,7 +187,7 @@
 (define (leading-spaces s) (- (string-length s) (string-length (string-trim s))))
 (define (blank? n) (string-null? (node-text n)))
 
-(define (port->tree port)
+(define* (port->tree port #:optional (first-line 1))   ; FIRST-LINE: number of the port's first line
   (let* ((raw (let loop ((acc '()))
                 (let ((l (read-line port)))
                   (if (eof-object? l) (reverse acc) (loop (cons (expand-tabs l) acc))))))
@@ -183,7 +200,7 @@
                        (let ((i (if (string-null? (string-trim l)) next (leading-spaces l))))
                          (loop rest i (cons i acc)))))))
          (root (make-node 0 -1 "" '())))
-    (let loop ((ls raw) (n 1) (is indents) (stack (list root)))
+    (let loop ((ls raw) (n first-line) (is indents) (stack (list root)))
       (match ls
         (() root)
         ((l . rest)
@@ -518,18 +535,32 @@
 ;; whole document -> one expression, (list …): a list of sibling nodes
 (define (read-markup-document port) (tree->expr (port->tree port)))
 ;; fragment -> list of expressions, one per top-level node
-(define (markup-string->exprs str)
-  (convert-children (node-kids (call-with-input-string str port->tree)) default-wrap))
+(define* (markup-string->exprs str #:optional (first-line 1) file)
+  "STR's top-level nodes as expressions.  FIRST-LINE is the line STR starts
+on in FILE, so errors name the file and its lines."
+  (parameterize ((current-uq-file file))
+    (convert-children (node-kids (call-with-input-string str (lambda (p) (port->tree p first-line))))
+                      default-wrap)))
 
 ;; (markup "…")  expands at compile time into ordinary Scheme:
 ;;   (list (p "text " (em "x")) (ul (li …)) …)
 ;; datum->syntax with the use site's context, so components and any
 ;; ,(expr) escapes resolve in the module/scope where markup is written.
+;; Errors name the Scheme file and its lines: the string's own source line
+;; when Guile records one, else the markup form's.  The #m reader passes
+;; the line and file explicitly.
 (define-syntax markup
   (lambda (x)
+    (define (source stx key) (and=> (syntax-source stx) (lambda (src) (assq-ref src key))))
+    (define (expand k str line file)
+      (datum->syntax k `(list ,@(markup-string->exprs str line file))))
     (syntax-case x ()
+      ((k str line file) (string? (syntax->datum #'str))
+       (expand #'k (syntax->datum #'str) (syntax->datum #'line) (syntax->datum #'file)))
       ((k str) (string? (syntax->datum #'str))
-       (datum->syntax #'k `(list ,@(markup-string->exprs (syntax->datum #'str))))))))
+       (expand #'k (syntax->datum #'str)
+               (or (and=> (or (source #'str 'line) (source x 'line)) 1+) 1)
+               (or (source #'str 'filename) (source x 'filename)))))))
 
 ;; Optional reader syntax, so no string quotes are needed:
 ;;   #m<<END
@@ -541,11 +572,12 @@
     (lambda (chr port)
       (unless (and (eqv? (read-char port) #\<) (eqv? (read-char port) #\<))
         (error "#m must be followed by <<TERMINATOR"))
-      (let ((term (string-trim-both (read-line port))))
+      (let* ((term  (string-trim-both (read-line port)))
+             (first (1+ (port-line port))))         ; 1-based line of the markup's first line
         (let loop ((acc '()))
           (let ((l (read-line port)))
             (cond ((eof-object? l) (error "#m<<" term ": terminator never found"))
                   ((string=? (string-trim-both l) term)
-                   `(markup ,(string-join (reverse acc) "\n")))
+                   `(markup ,(string-join (reverse acc) "\n") ,first ,(port-filename port)))
                   (else (loop (cons l acc))))))))))
 
