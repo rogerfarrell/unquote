@@ -23,6 +23,7 @@ Prefer moving complexity into components or the parser.
 | =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
 | =uq/tags.scm=      | generic components: structure, lists, inline markup        |
 | =uq/compile.scm=   | =compile-uq= and helpers: .uq file -> HTML, for build scripts |
+| =uq/qr.scm=        | optional =,qr= component; needs Guile-QR-Code            |
 | =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
 | =examples/recipe/= | =(recipe tags)=, =recipe.uq= and its =build.scm= script   |
@@ -32,6 +33,7 @@ Prefer moving complexity into components or the parser.
 
 #+begin_src sh
 guile -L . -L examples tests/run.scm             # must print "all tests passed"
+                                                 # (QR tests run only if Guile-QR-Code is on the load path)
 guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.uq         # render
 guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.uq  # show intermediate Scheme on stderr
 examples/recipe/build.scm                        # compile recipe.uq -> recipe.html (git-ignored)
@@ -124,7 +126,10 @@ component modules must be loaded before a document is parsed.
 - Do not name a module =(unquote …)=.  =define-module= quasiquotes its
   arguments, so =(unquote parse)= is read as =,parse=.  The modules live
   under =(uq …)= for that reason.
-- Keep =(uq tags)= generic.  Components for a particular kind of page go in
+- Keep =(uq tags)= generic and free of dependencies beyond Guile.  Components
+  that need a library go in their own module, as =(uq qr)= does, and their
+  tests skip when the library is missing.
+- Components for a particular kind of page go in
   their own module under =examples/= (or the user's project), using
   =(uq parse)= and, for helpers such as =plain=, =(uq tags)=.
 - =define-tag= exports the component from the

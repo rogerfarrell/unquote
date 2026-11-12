@@ -346,6 +346,31 @@
          (with-output-to-string (lambda () (write-sxml '(ul (li "a")) #:indent 4)))
          "<ul>\n    <li>a</li>\n</ul>"))
 
+;;; (uq qr): optional, tested only when Guile-QR-Code is installed
+(if (false-if-exception (resolve-interface '(qr-code)))
+    (begin
+      (use-modules (uq qr))
+      (let ((svg (lambda (src) (render src))))
+        (check "qr: an inline svg with its label"
+               (and (string-contains (svg "Scan ,qr[https://example.com/r][the recipe].")
+                                     "<p>Scan <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 33 33\" class=\"qr\" role=\"img\" aria-label=\"the recipe\"")
+                    #t)
+               #t)
+        (check "qr: the data is the label when there is none"
+               (and (string-contains (svg ",qr[0123456789]") "aria-label=\"0123456789\"") #t) #t)
+        (check "qr: :ecc changes the code"
+               (equal? (svg ",qr[https://example.com/r :ecc high]") (svg ",qr[https://example.com/r]"))
+               #f)
+        (check "qr: :ecc is case-insensitive"
+               (svg ",qr[https://example.com/r :ecc HIGH]") (svg ",qr[https://example.com/r :ecc high]"))
+        (check "qr: quoted data with spaces"
+               (and (string-contains (svg ",qr[\"WIFI:S:Kitchen Net;;\"][wifi]") "aria-label=\"wifi\"") #t) #t))
+      (fails "x\n\n,qr[x :ecc best]" "line 3: ,qr: :ecc is low, medium, quartile or high, not best")
+      (fails ",qr[:ecc high]" "line 1: ,qr needs data: ,qr[data][label]")
+      (fails ",qr[WIFI:S:Kitchen Net;;]" "line 1: ,qr takes one data value; quote it if it has spaces: ,qr[\"a b\"]")
+      (fails ",qr" "line 1: ,qr needs attributes: ,qr[attributes][text]"))
+    (format #t "skipping (uq qr) tests: Guile-QR-Code is not installed~%"))
+
 (if (zero? failures)
     (format #t "all tests passed~%")
     (begin (format #t "~a failed~%" failures) (exit 1)))

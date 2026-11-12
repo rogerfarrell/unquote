@@ -240,6 +240,29 @@ The two keywords combine, in either order.  A list that takes attributes:
 Since =#:attributes= is optional, =,steps= alone works too: no
 attributes, and text after it on the line is the first line of its body.
 
+* QR codes (optional)
+
+=(uq qr)= adds a =,qr= command.  It needs [[https://github.com/artyom-poptsov/guile-qr-code][Guile-QR-Code]] and the Guile-Lib
+it uses (on Guix: =guix install guile-qr-code=); nothing else in unquote
+depends on them.  Load it like any tags module: =--tags "(uq qr)"=, or
+=#:tags '((uq qr))=.
+
+#+begin_example
+Scan ,qr[https://example.com/recipes/cheeseburger-helper][the recipe online].
+
+,qr["WIFI:T:WPA;S:Kitchen Net;P:secret;;" :ecc high][Kitchen Wi-Fi]
+#+end_example
+
+- The first word in the attribute bracket is the data: any text -- a URL,
+  digits, a =WIFI:= or =mailto:= string, a vCard.  Quote it if it has
+  spaces or brackets, and write line breaks as =\n= inside the quotes.
+- =:ecc= sets the error correction: =low= (the default), =medium=,
+  =quartile= or =high=.
+- The text bracket is the accessible name (=aria-label=); without one,
+  the data is used.
+- The result is an inline =<svg class="qr">= with a quiet zone, scaled
+  to whatever size CSS gives it.
+
 * Build scripts
 
 =(uq compile)= compiles =.uq= files to HTML.  The output is a fragment;
