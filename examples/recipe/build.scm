@@ -18,6 +18,7 @@ exec guile --no-auto-compile -e main -s "$0" "$@"
 ;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; build.scm -- compile recipe.uq into a standalone HTML page.
+;;; Shows the #:page hook: the page around the recipe is built here.
 ;;;
 ;;;   examples/recipe/build.scm [INPUT.uq [OUTPUT.html]]
 ;;;
@@ -33,8 +34,17 @@ exec guile --no-auto-compile -e main -s "$0" "$@"
 
 (define here (dirname (current-filename)))
 
+;; The page around the compiled recipe.  compile-uq writes a bare
+;; fragment unless given a page; an html root gets a doctype.
+(define (page recipe)
+  `(html (@ (lang "en"))
+     (head (meta (@ (charset "utf-8")))
+           (meta (@ (name "viewport") (content "width=device-width, initial-scale=1")))
+           (title ,(or (page-title recipe) "Recipe")))
+     (body ,recipe)))
+
 (define* (build in #:optional out)
-  (unless (compile-uq in #:out out #:tags '((recipe tags)) #:indent #t)
+  (unless (compile-uq in #:out out #:tags '((recipe tags)) #:page page #:indent #t)
     (exit 1)))
 
 ;; Entry point, called by the -e main in the header with (command-line).

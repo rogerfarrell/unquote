@@ -22,7 +22,7 @@ Prefer moving complexity into components or the parser.
 |--------------------+------------------------------------------------------------|
 | =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
 | =uq/tags.scm=      | generic components: structure, lists, inline markup        |
-| =uq/compile.scm=   | =compile-uq= and helpers: .uq file -> HTML page, for scripts |
+| =uq/compile.scm=   | =compile-uq= and helpers: .uq file -> HTML, for build scripts |
 | =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
 | =examples/recipe/= | =(recipe tags)=, =recipe.uq= and its =build.scm= script   |
@@ -92,6 +92,10 @@ component modules must be loaded before a document is parsed.
   are not phrasing or =pre=-like and whose children are all elements get
   line breaks; runs of phrasing siblings share a line.  Check changes by
   comparing minified and indented pages in a browser (text and pixels).
+- =compile-uq= writes a fragment.  It does not grow options for page
+  furniture (head, stylesheets, language): those belong in the build
+  script's =#:page= procedure.  =write-html= adds a doctype only when the
+  root is =html=.
 - Components return SXML.  Empty non-void elements serialise as =<em />=,
   which browsers treat as an open tag; avoid producing them.
 

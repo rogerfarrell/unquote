@@ -170,21 +170,34 @@ holds everything up to the next blank line, nested blocks included.
 
 * Build scripts
 
-=(uq compile)= compiles =.uq= files to complete HTML pages, so a build
-script only names its inputs and component modules:
+=(uq compile)= compiles =.uq= files to HTML.  The output is a fragment;
+whatever goes around it -- doctype, head, site header -- is ordinary SXML
+in the build script, passed as =#:page=:
 
 #+begin_src scheme
 (use-modules (uq compile))
 
-(compile-uq "recipe.uq" #:tags '((recipe tags)))   ; -> recipe.html
+(compile-uq "recipe.uq" #:tags '((recipe tags)))   ; -> recipe.html, a fragment
+
+(define (page recipe)
+  `(html (@ (lang "en"))
+     (head (meta (@ (charset "utf-8")))
+           (title ,(page-title recipe)))
+     (body (header (a (@ (href "/")) "Recipes"))
+           (main ,recipe))))
+
+(compile-uq "recipe.uq" #:tags '((recipe tags)) #:page page #:indent #t)
 #+end_src
 
 - =#:out= sets the output file; the default replaces =.uq= with =.html=.
 - =#:tags= lists extra component modules, loaded before parsing.
-- =#:page= turns the document's SXML into the =html= element.  The
-  default, =default-page=, adds a doctype, charset and viewport, and takes
-  the =<title>= from the first =h1=; it also accepts =#:lang= and
-  =#:stylesheets=.
+- =#:page= is a procedure from the document's SXML to the SXML to write.
+  If its result is an =html= element, an HTML5 doctype is added; anything
+  else is written as a fragment.  =page-title= gives the text of the first
+  =h1=, for the =<title>=.
+- The document's own root comes from the =document= component (an
+  =<article>= in =(uq tags)=).  A project can redefine it in its tags
+  module, since later =#:tags= modules take precedence.
 - =#:indent= (=#t= for two spaces, or a number) writes indented HTML
   instead of one long line.  Indentation is added only where it cannot
   change the rendering: elements whose children are all elements are
@@ -195,7 +208,7 @@ script only names its inputs and component modules:
   error it prints =FILE: line N: message=, writes nothing and returns =#f=.
 
 Lower-level pieces are exported too: =uq-file->expr=, =uq-file->sxml=,
-=component-module=, =page-title=, =write-html-page= and =write-sxml=
+=component-module=, =page-title=, =write-html= and =write-sxml=
 (=sxml->xml= with an optional =#:indent=).
 =examples/recipe/build.scm= is a complete script.
 

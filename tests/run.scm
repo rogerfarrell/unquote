@@ -134,13 +134,41 @@
   (let ((out (with-output-to-string
                (lambda () (compile-uq good #:tags '((recipe tags)))))))
     (check "compile-uq reports" out (string-append good " -> " dir "/good.html\n")))
-  (check "compile-uq page"
-         (call-with-input-file (string-append dir "/good.html")
-           (lambda (p) (set-port-encoding! p "UTF-8") (get-string-all p)))
-         (string-append "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\" />"
-                        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
-                        "<title>Cheese Helper</title></head><body><article><div class=\"recipe\">"
-                        "<h1>Cheese <em>Helper</em></h1></div></article></body></html>\n"))
+  (define (slurp f) (call-with-input-file f (lambda (p) (set-port-encoding! p "UTF-8") (get-string-all p))))
+  (check "compile-uq writes a fragment by default"
+         (slurp (string-append dir "/good.html"))
+         "<article><div class=\"recipe\"><h1>Cheese <em>Helper</em></h1></div></article>\n")
+  (with-output-to-string
+    (lambda ()
+      (compile-uq good #:tags '((recipe tags))
+                  #:page (lambda (doc) `(html (head (title ,(page-title doc))) (body (main ,doc))))
+                  #:indent #t)))
+  (check "compile-uq #:page with an html root adds a doctype"
+         (slurp (string-append dir "/good.html"))
+         (string-append "<!DOCTYPE html>\n<html>\n  <head>\n    <title>Cheese Helper</title>\n  </head>\n"
+                        "  <body>\n    <main>\n      <article>\n        <div class=\"recipe\">\n"
+                        "          <h1>Cheese <em>Helper</em></h1>\n        </div>\n      </article>\n"
+                        "    </main>\n  </body>\n</html>\n"))
+  (with-output-to-string
+    (lambda () (compile-uq good #:tags '((recipe tags)) #:page (lambda (doc) `(section ,doc)))))
+  (check "compile-uq #:page with another root stays a fragment"
+         (slurp (string-append dir "/good.html"))
+         "<section><article><div class=\"recipe\"><h1>Cheese <em>Helper</em></h1></div></article></section>\n")
+  ;; a later #:tags module may redefine a generic component, without warnings
+  (mkdir (string-append dir "/override"))
+  (with-output-to-file (string-append dir "/override/tags.scm")
+    (lambda ()
+      (write '(define-module (override tags) #:use-module (uq parse)))
+      (write '(define-tag block (document . body) `(main ,@body)))))
+  (add-to-load-path dir)
+  (let* ((err (open-output-string))
+         (out (with-error-to-port err
+                (lambda () (with-output-to-string
+                             (lambda () (compile-uq good #:tags '((recipe tags) (override tags)))))))))
+    (check "compile-uq: later tags module wins" (slurp (string-append dir "/good.html"))
+           "<main><div class=\"recipe\"><h1>Cheese <em>Helper</em></h1></div></main>\n")
+    (check "compile-uq: override is quiet" (get-output-string err) ""))
+
   (let* ((err (open-output-string))
          (result (with-error-to-port err
                    (lambda () (compile-uq bad #:tags '((recipe tags)))))))
@@ -150,7 +178,8 @@
     (check "compile-uq writes nothing on error"
            (file-exists? (string-append dir "/bad.html")) #f))
   (for-each (lambda (f) (when (file-exists? f) (delete-file f)))
-            (list good bad (string-append dir "/good.html")))
+            (list good bad (string-append dir "/good.html") (string-append dir "/override/tags.scm")))
+  (rmdir (string-append dir "/override"))
   (rmdir dir))
 
 ;;; write-sxml: indentation only where it cannot change rendering
