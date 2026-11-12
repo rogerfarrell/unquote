@@ -1,0 +1,96 @@
+#+title: Notes for coding agents
+
+This file is for AI coding agents (and humans) changing this repository.
+Read README.org first for what the project is and the editor syntax.
+
+* Purpose and audience
+
+/unquote/ has two audiences with opposite needs:
+
+- Editors and writers, who are not programmers.  Their syntax must stay
+  lean: commas for commands, indentation for children, brackets only for
+  inline extent and addresses.  No attributes, no quotes, no block closers.
+- The template maintainer, who writes components in Guile Scheme.
+
+Changes that add syntax for editors need the maintainer's agreement.
+Prefer moving complexity into components or the parser.
+
+* Layout
+
+| path               | contents                                                   |
+|--------------------+------------------------------------------------------------|
+| =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
+| =uq/tags.scm=      | the component set (recipe-card example)                    |
+| =unquote.scm=      | command-line renderer                                      |
+| =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
+| =examples/=        | =recipe.cm= document, =demo.scm= markup embedded in Scheme |
+
+* Commands
+
+#+begin_src sh
+guile -L . tests/run.scm                          # must print "all tests passed"
+guile -L . unquote.scm examples/recipe.cm         # render
+guile -L . unquote.scm --expr examples/recipe.cm  # show intermediate Scheme on stderr
+guile -L . examples/demo.scm                      # embedding demo
+#+end_src
+
+Use =--no-auto-compile= if stale compiled files in =~/.cache/guile= get in
+the way.  Requires Guile 3.0.
+
+* How a document becomes HTML
+
+1. =port->tree=: lines become an indentation tree.  A blank line takes the
+   indent of the next non-blank line.  Tabs count as four spaces.
+2. =block-head=: a line starting with =,name= for a registered block kind
+   is a block; everything else is text.
+3. =convert-block= / =convert-children=: =block:inline= tags take one run
+   of text; =block:block= tags split their body at blank lines and wrap
+   each group in their =#:wrap= tag (default =p=).  The wrapper's kind
+   decides what a group may hold.
+4. =parse-inline=: each run is parsed once, lines joined with newlines, for
+   inline commands, brackets, addresses and =,(expr)= escapes.
+5. The result is one Scheme expression, =(document …)=.  It is evaluated in
+   the components' module and written with =sxml->xml=.
+
+* Invariants
+
+- Kinds are exactly =block:block= (alias =block=), =block:inline=,
+  =inline:inline= (alias =inline=) and =inline:word= (alias =word=).
+  Aliases are resolved in =register!=; code after registration only sees
+  canonical names.
+- Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
+- Address commands read =[address]= first and an optional =[text]= second.
+- Parse errors are raised with =oops= and start with ="line N: "=.  Report
+  the line where the problem starts (where a bracket opened, not where the
+  run started).
+- Error messages are ASCII only: Guile's error port may print other
+  characters as =?=.
+- Do not name a module =(unquote …)=.  =define-module= quasiquotes its
+  arguments, so =(unquote parse)= is read as =,parse=.  The modules live
+  under =(uq …)= for that reason.
+- Components return SXML.  Empty non-void elements serialise as =<em />=,
+  which browsers treat as an open tag; avoid producing them.
+
+* Known issues
+
+- An inline command with nothing after it at the end of a line (=a ,em=
+  then a newline) produces an empty element, written as =<em />=.  It
+  should be a parse error.
+- Mixed tabs and spaces are not detected and can mis-nest silently.
+- There is no escape for a literal word that starts with a comma.
+
+* Making changes
+
+- Add or update a case in =tests/run.scm= for every behaviour change, and
+  run the tests before committing.
+- If the HTML for =examples/recipe.cm= changes, say why in the commit.
+- Keep the editor-facing rules in README.org in step with the parser.
+- New source files get the GPL-3.0-or-later header used in the existing
+  files.
+
+* AI disclosure
+
+This project is largely AI-written; see the disclosure in README.org.
+Agents must keep that section accurate: update it if the balance of who
+writes what changes, and never remove it.  Commits made by an agent should
+say so in the commit message trailer.

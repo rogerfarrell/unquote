@@ -1,0 +1,323 @@
+;;; SPDX-License-Identifier: GPL-3.0-or-later
+;;; Copyright (C) 2026 Roger Farrell
+;;;
+;;; This program is free software: you can redistribute it and/or modify
+;;; it under the terms of the GNU General Public License as published by
+;;; the Free Software Foundation, either version 3 of the License, or
+;;; (at your option) any later version.
+;;;
+;;; This program is distributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;; GNU General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU General Public License
+;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+(define-module (uq parse)
+  #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 regex)
+  #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
+  #:export (define-tag define-tag/address markup enable-markup-reader!
+            read-markup-document markup-string->exprs))
+
+;;; ================= Component registry =================
+;; name -> (kind address? wrap)
+;; Kinds are  placement:content.
+;;   block:block   (alias block)   starts a line; holds blank-line-separated groups,
+;;                                 each wrapped in the tag's #:wrap (default p)
+;;   block:inline                  starts a line; holds one run of inline content
+;;   inline:inline (alias inline)  mid-line; without [brackets] runs to end of line
+;;   inline:word   (alias word)    mid-line; without [brackets] takes the next word
+;;
+;; #:wrap decides how a group is wrapped, and the wrapper's own kind decides
+;; what a group may hold:
+;;   wrapper is block:inline (p)   group = a run of text; a block line ends it
+;;   wrapper is block:block  (li)  group = everything up to the next blank line,
+;;                                 text and blocks together
+(define block-kinds  '(block:block block:inline))
+(define inline-kinds '(inline:inline inline:word))
+(define (canonical-kind k)
+  (case k ((block) 'block:block) ((inline) 'inline:inline) ((word) 'inline:word) (else k)))
+(define registry (make-hash-table))
+(define (entry name)    (hash-ref registry name))
+(define (kind-of name)  (and=> (entry name) car))
+(define (address? name) (and=> (entry name) cadr))
+(define (wrap-of name)  (or (and=> (entry name) caddr) 'p))
+
+(define (register! name kind address? wrap)
+  (let ((k (canonical-kind kind)))
+    (unless (memq k (append block-kinds inline-kinds))
+      (error "define-tag: unknown kind" kind))
+    (when (and wrap (not (eq? k 'block:block)))
+      (error "define-tag: only block:block tags take #:wrap" name))
+    (hash-set! registry name (list k address? wrap))))
+
+(define-syntax define-tag              ; (define-tag kind (name . body) [#:wrap tag] …)
+  (syntax-rules ()
+    ((_ kind (name . body) #:wrap w expr ...)
+     (begin (define (name . body) expr ...) (register! 'name 'kind #f 'w)))
+    ((_ kind (name . body) expr ...)
+     (begin (define (name . body) expr ...) (register! 'name 'kind #f #f)))))
+
+(define-syntax define-tag/address      ; (define-tag/address kind (name addr . body) …)
+  (syntax-rules ()
+    ((_ kind (name addr . body) expr ...)
+     (begin (define (name addr . body) expr ...) (register! 'name 'kind #t #f)))))
+
+(define (oops line fmt . args)
+  (error (string-append "line " (number->string line) ": " (apply format #f fmt args))))
+
+;;; ================= Lines -> indentation tree =================
+(define-record-type <node>
+  (make-node line indent text kids) node?
+  (line node-line) (indent node-indent) (text node-text) (kids node-kids set-node-kids!))
+
+(define (expand-tabs s) (regexp-substitute/global #f "\t" s 'pre "    " 'post))
+(define (leading-spaces s) (- (string-length s) (string-length (string-trim s))))
+(define (blank? n) (string-null? (node-text n)))
+
+(define (port->tree port)
+  (let* ((raw (let loop ((acc '()))
+                (let ((l (read-line port)))
+                  (if (eof-object? l) (reverse acc) (loop (cons (expand-tabs l) acc))))))
+         ;; a blank line takes the indent of the next non-blank line,
+         ;; so it lands among the siblings it separates
+         (indents (let loop ((ls (reverse raw)) (next 0) (acc '()))
+                    (match ls
+                      (() acc)
+                      ((l . rest)
+                       (let ((i (if (string-null? (string-trim l)) next (leading-spaces l))))
+                         (loop rest i (cons i acc)))))))
+         (root (make-node 0 -1 "" '())))
+    (let loop ((ls raw) (n 1) (is indents) (stack (list root)))
+      (match ls
+        (() root)
+        ((l . rest)
+         (let* ((ind (car is))
+                (node (make-node n ind (string-trim-both l) '()))
+                (stack (drop-while (lambda (s) (>= (node-indent s) ind)) stack))
+                (parent (car stack)))
+           (set-node-kids! parent (append (node-kids parent) (list node)))
+           (loop rest (1+ n) (cdr is) (if (blank? node) stack (cons node stack)))))))))
+
+;;; ================= Brackets =================
+(define (matching-bracket s open)      ; index of "]" matching "[" at OPEN, or #f
+  (let loop ((j (1+ open)) (depth 0))
+    (cond ((>= j (string-length s)) #f)
+          ((char=? (string-ref s j) #\[) (loop (1+ j) (1+ depth)))
+          ((char=? (string-ref s j) #\]) (if (zero? depth) j (loop (1+ j) (1- depth))))
+          (else (loop (1+ j) depth)))))
+
+;; Read ",name[…]" / ",name[address][…]" starting at the "[" at OPEN.
+;; Address commands read the address first (as in HTML: <a href=…>text</a>),
+;; then an optional text bracket.  Returns (values text address-or-#f index-after).
+(define (read-brackets s open name line)
+  (let ((close (matching-bracket s open)))
+    (unless close (oops line ",~a[ is never closed with ]" name))
+    (let ((first (substring s (1+ open) close))
+          (next  (1+ close)))
+      (cond
+       ((not (address? name)) (values first #f next))    ; a following "[…]" is just text
+       ((and (< next (string-length s)) (char=? (string-ref s next) #\[))
+        (let ((close2 (matching-bracket s next)))
+          (unless close2 (oops line "the text after ,~a[...] is never closed with ]" name))
+          (values (substring s (1+ next) close2) (string-delete char-whitespace? first) (1+ close2))))
+       (else (values "" (string-delete char-whitespace? first) next))))))   ; text is optional
+
+;;; ================= Inline text -> parts =================
+;; S is a whole paragraph or item: its lines joined with "\n".  LINE is the
+;; file line S starts on.  Newlines become spaces in the output, but a
+;; inline:inline command without brackets still stops at one.
+(define (name-char? c) (or (char-alphabetic? c) (char-numeric? c) (memv c '(#\- #\_ #\? #\!))))
+(define (name-end s i) (let scan ((j i)) (if (and (< j (string-length s)) (name-char? (string-ref s j))) (scan (1+ j)) j)))
+(define (nl->sp str) (string-map (lambda (c) (if (char=? c #\newline) #\space c)) str))
+(define (line-at s i line) (+ line (string-count (substring s 0 i) #\newline)))
+(define (call name addr parts) `(,name ,@(if addr (list addr) '()) ,@parts))
+
+(define (parse-inline s line)
+  (let loop ((i 0) (start 0) (acc '()))
+    (define (text-upto j) (if (> j start) (cons (nl->sp (substring s start j)) acc) acc))
+    (cond
+     ((>= i (string-length s)) (reverse (text-upto i)))
+     ((and (char=? (string-ref s i) #\,)
+           (or (zero? i) (memv (string-ref s (1- i)) '(#\space #\newline #\( #\[)))
+           (< (1+ i) (string-length s))
+           (let ((n (string-ref s (1+ i)))) (or (char-alphabetic? n) (char=? n #\())))
+      (if (char=? (string-ref s (1+ i)) #\()
+          ;; ,(expr) — read one Scheme datum and splice it in
+          (let* ((p (open-input-string (substring s (1+ i))))
+                 (datum (read p))
+                 (end (+ i 1 (ftell p))))
+            (loop end end (cons datum (text-upto i))))
+          (let* ((ne (name-end s (1+ i)))
+                 (name (string->symbol (substring s (1+ i) ne)))
+                 (here (line-at s i line))
+                 (kind (kind-of name)))
+            (cond
+             ((not kind) (oops here "unknown command ,~a" name))
+             ((memq kind block-kinds) (oops here ",~a has to start its own line" name))
+             ((and (< ne (string-length s)) (char=? (string-ref s ne) #\[))
+              (call-with-values (lambda () (read-brackets s ne name here))
+                (lambda (inner addr after)
+                  (loop after after (cons (call name addr (parse-inline inner here)) (text-upto i))))))
+             ((address? name) (oops here ",~a needs brackets: ,~a[address][words]" name name))
+             (else                       ; declared extent: next word / rest of line
+              (let* ((after (if (and (< ne (string-length s)) (char=? (string-ref s ne) #\space)) (1+ ne) ne))
+                     (stop (if (eq? kind 'inline:word) char-whitespace? (lambda (c) (char=? c #\newline))))
+                     (we (or (string-index s stop after) (string-length s))))
+                (loop we we (cons (call name #f (parse-inline (substring s after we) here))
+                                  (text-upto i)))))))))
+     (else (loop (1+ i) start acc)))))
+
+;;; ================= Tree -> Scheme expression =================
+;; Is this line a block command?  Returns (name address head-text) or #f.
+(define (block-head n)
+  (let ((s (node-text n)))
+    (and (> (string-length s) 1)
+         (char=? (string-ref s 0) #\,)
+         (char-alphabetic? (string-ref s 1))
+         (let* ((ne (name-end s 1))
+                (name (string->symbol (substring s 1 ne))))
+           (case (kind-of name)
+             ((block:block block:inline)
+              (cond
+               ((and (< ne (string-length s)) (char=? (string-ref s ne) #\[))
+                (call-with-values (lambda () (read-brackets s ne name (node-line n)))
+                  (lambda (inner addr after)
+                    (unless (string-null? (string-trim (substring s after)))
+                      (oops (node-line n) "unexpected text after ,~a[...]" name))
+                    (list name addr inner))))
+               ((address? name)
+                (oops (node-line n) ",~a needs brackets: ,~a[address][words]" name name))
+               (else (list name #f (string-trim (substring s ne))))))
+             ((#f) (oops (node-line n) "unknown command ,~a" name))
+             (else #f))))))                     ; inline command at line start: text
+
+;; raw text of a node plus its continuation lines, joined with "\n"
+(define (text-string n)
+  (string-join (cons (node-text n)
+                     (filter-map (lambda (k) (and (not (blank? k)) (not (block-head k)) (text-string k)))
+                                 (node-kids n)))
+               "\n"))
+
+;; block nodes indented under a text line (through its continuation lines)
+(define (text-blocks n)
+  (append-map (lambda (k) (cond ((blank? k) '()) ((block-head k) (list k)) (else (text-blocks k))))
+              (node-kids n)))
+
+(define (run-parts nodes)               ; text nodes -> one parsed inline run
+  (parse-inline (string-join (map text-string nodes) "\n") (node-line (car nodes))))
+
+;; KIDS of a block:block, grouped by blank lines and wrapped in WRAP.
+(define (convert-children kids wrap)
+  (case (kind-of wrap)
+    ((block:inline) (inline-groups kids wrap))
+    ((block:block)  (block-groups kids wrap))
+    (else (error (format #f "#:wrap ~a must be a block:block or block:inline tag" wrap)))))
+
+;; wrapper holds only text (p): a run of text lines per group; block lines
+;; and blank lines end the run, and blocks stand on their own
+(define (inline-groups kids wrap)
+  (let loop ((kids kids) (run '()) (out '()))
+    (define (flush)
+      (if (null? run) out
+          (let ((run (reverse run)))
+            (append (reverse (map convert-block (append-map text-blocks run)))
+                    (cons (call wrap #f (run-parts run)) out)))))
+    (match kids
+      (() (reverse (flush)))
+      ((k . rest)
+       (cond ((blank? k)      (loop rest '() (flush)))
+             ((block-head k)  (loop rest '() (cons (convert-block k) (flush))))
+             (else            (loop rest (cons k run) out)))))))
+
+;; wrapper holds blocks too (li): everything up to a blank line is one group
+(define (block-groups kids wrap)
+  (define (group->call group)
+    (match group
+      (((? block-head k)) (=> skip)              ; a lone ,li needs no second li
+       (if (eq? (car (block-head k)) wrap) (convert-block k) (skip)))
+      (_ (let loop ((nodes group) (run '()) (parts '()))
+           (define (flush) (if (null? run) parts (append parts (run-parts (reverse run)))))
+           (match nodes
+             (() (call wrap #f (flush)))
+             ((k . rest)
+              (if (block-head k)
+                  (loop rest '() (append (flush) (list (convert-block k))))
+                  (let ((nested (text-blocks k)))
+                    (if (null? nested)
+                        (loop rest (cons k run) parts)
+                        (loop rest '() (append parts (run-parts (reverse (cons k run)))
+                                               (map convert-block nested))))))))))))
+  (let loop ((kids kids) (group '()) (out '()))
+    (define (flush) (if (null? group) out (cons (group->call (reverse group)) out)))
+    (match kids
+      (() (reverse (flush)))
+      ((k . rest) (if (blank? k) (loop rest '() (flush)) (loop rest (cons k group) out))))))
+
+;; The head run: text on the command's own line plus the indented text
+;; lines straight after it, up to the first blank line or block.
+;; Returns (values text first-line remaining-kids).
+(define (head-run n head)
+  (let loop ((kids (node-kids n))
+             (acc  (if (string-null? head) '() (list head)))
+             (line (if (string-null? head) #f (node-line n))))
+    (match kids
+      (((? (lambda (k) (not (or (blank? k) (block-head k)))) k) . rest)
+       (loop rest (cons (text-string k) acc) (or line (node-line k))))
+      (_ (values (string-join (reverse acc) "\n") (or line (node-line n)) kids)))))
+
+(define (convert-block n)
+  (match (block-head n)
+    ((name addr head)
+     (case (kind-of name)
+       ((block:inline)
+        (call-with-values (lambda () (head-run n head))
+          (lambda (text line rest)
+            (let ((extra (find (lambda (k) (not (blank? k))) rest)))
+              (when extra
+                (oops (node-line extra) ",~a holds one run of text; no blank lines or blocks inside it" name)))
+            (call name addr (parse-inline text line)))))
+       ((block:block)
+        ;; text on the command's own line is simply the first line of its body
+        (let ((kids (if (string-null? head) (node-kids n)
+                        (cons (make-node (node-line n) (node-indent n) head '()) (node-kids n)))))
+          (call name addr (convert-children kids (wrap-of name)))))))))
+
+(define (tree->expr root) `(document ,@(convert-children (node-kids root) (wrap-of 'document))))
+
+;;; ================= Entry points =================
+;; whole document -> one expression, (document …)
+(define (read-markup-document port) (tree->expr (port->tree port)))
+;; fragment -> list of expressions (no document wrapper)
+(define (markup-string->exprs str)
+  (convert-children (node-kids (call-with-input-string str port->tree)) 'p))
+
+;; (markup "…")  expands at compile time into ordinary Scheme:
+;;   (list (p "text " (em "x")) (ul (li …)) …)
+;; datum->syntax with the use site's context, so components and any
+;; ,(expr) escapes resolve in the module/scope where markup is written.
+(define-syntax markup
+  (lambda (x)
+    (syntax-case x ()
+      ((k str) (string? (syntax->datum #'str))
+       (datum->syntax #'k `(list ,@(markup-string->exprs (syntax->datum #'str))))))))
+
+;; Optional reader syntax, so no string quotes are needed:
+;;   #m<<END
+;;   …markup…
+;;   END
+;; reads as (markup "…").  Enable with (enable-markup-reader!).
+(define (enable-markup-reader!)
+  (read-hash-extend #\m
+    (lambda (chr port)
+      (unless (and (eqv? (read-char port) #\<) (eqv? (read-char port) #\<))
+        (error "#m must be followed by <<TERMINATOR"))
+      (let ((term (string-trim-both (read-line port))))
+        (let loop ((acc '()))
+          (let ((l (read-line port)))
+            (cond ((eof-object? l) (error "#m<<" term ": terminator never found"))
+                  ((string=? (string-trim-both l) term)
+                   `(markup ,(string-join (reverse acc) "\n")))
+                  (else (loop (cons l acc))))))))))
+

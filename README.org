@@ -1,0 +1,165 @@
+#+title: unquote
+#+subtitle: A lightweight comma markup for editors, rendered to HTML with Guile Scheme
+
+/unquote/ lets writers and editors fill structured HTML templates without
+writing HTML, brackets around blocks, quotes or attributes.  Commands start
+with a comma, the way Scheme's =unquote= escapes out of a quoted template;
+indentation marks children.  Every command is an ordinary Guile procedure
+that returns SXML, so the person maintaining the templates works in plain
+Scheme.
+
+#+begin_example
+,recipe
+  ,title Cheeseburger Helper
+  ,photo[cheeseburger-jar.jpg][A half-gallon jar of layered pasta and spices]
+  ,yield 1 half-gallon or 1 half-pint (see tip)
+
+  ,ingredients
+    ,ul
+      4 cups pasta (small shells or elbow macaroni)
+
+      ,frac[1/2] cup whole milk powder
+
+  ,tip
+    If you want to keep the pasta with all the other ingredients, you'll
+    need a half-gallon jar.  See our ,link[https://example.com/jars][jar guide].
+#+end_example
+
+* Requirements
+
+GNU Guile 3.0 or later.  No other dependencies.
+
+* Usage
+
+Render a document:
+
+#+begin_src sh
+guile -L . unquote.scm examples/recipe.cm > recipe.html
+guile -L . unquote.scm --expr examples/recipe.cm   # also print the intermediate Scheme
+#+end_src
+
+Run the tests:
+
+#+begin_src sh
+guile -L . tests/run.scm
+#+end_src
+
+* Editor syntax
+
+** Commands
+- A command is a comma followed by a name: =,tip=, =,em=.
+- A comma is a command only at the start of a word (start of line, or after
+  a space, =(= or =[=) and when a letter follows.  =salt, pepper=,
+  =salt,pepper= and =1,000= are plain text.
+- Unknown commands are errors with a line number.
+
+** Blocks
+- A block command starts its own line.  Indented lines below it are its
+  children.
+- In most blocks (=,tip=, =,ul=, …), a blank line separates groups: a new
+  paragraph, or a new list item.  Lines of one group join with spaces, so
+  editors can wrap freely.
+- Text after the command on the same line is the first line of its body.
+- Some blocks (=,title=, =,yield=, …) hold one run of text.  Wrapped lines
+  join; a blank line or a nested block inside one is an error.
+
+** Lists
+#+begin_example
+,ul
+  First item, which may wrap
+  onto a second line
+
+  Second item
+  ,ol
+    A nested item
+
+    Another
+
+  ,li
+    An item with two paragraphs.
+
+    The second paragraph.
+#+end_example
+
+** Inline commands
+- =,em[some words]= covers exactly the bracketed text.  Brackets nest and may
+  span lines; balanced brackets inside are plain text.
+- Without brackets an inline command takes the rest of the line
+  (=,em Optional:=), and a word command takes the next word (=,frac 1/2=).
+- A =[= that does not directly follow a command name is plain text, so
+  =[sic]= is safe.
+
+** Links and images
+- The address comes first, as in HTML: =,link[address][text]=,
+  =,image[file][alt text]=, =,photo[file][alt text]=.
+- The text bracket is optional.  A link without text shows its address.
+- Whitespace in the address is removed, so long URLs may wrap.
+
+** No attributes
+Editors never write attributes.  Classes, labels and sizes live in the
+component definitions.
+
+* Defining components
+
+Components live in a module such as =uq/tags.scm=.  Each is a procedure
+returning SXML, registered with a kind:
+
+| kind                    | placement   | content                                                     |
+|-------------------------+-------------+-------------------------------------------------------------|
+| =block= (=block:block=) | own line    | groups split by blank lines, each wrapped in =#:wrap= (=p=) |
+| =block:inline=          | own line    | one run of inline content                                   |
+| =inline= (=inline:inline=) | mid-line | without brackets, the rest of the line                      |
+| =word= (=inline:word=)  | mid-line    | without brackets, the next word                             |
+
+#+begin_src scheme
+(define-tag block        (tip . body)   `(aside (@ (class "tip")) (h3 "Tip!") ,@body))
+(define-tag block:inline (title . body) `(h1 ,@body))
+(define-tag block        (ul . body) #:wrap li `(ul ,@body))
+(define-tag block        (li . body)    `(li ,@body))
+(define-tag inline       (em . body)    `(em ,@body))
+(define-tag/address inline (link href . body) `(a (@ (href ,href)) ,@body))
+#+end_src
+
+=#:wrap= names the tag each blank-line group is wrapped in.  The wrapper's
+own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
+a run of text, and block lines stand on their own; a =block= wrapper (=li=)
+holds everything up to the next blank line, nested blocks included.
+
+* Using markup inside Scheme
+
+#+begin_src scheme
+(use-modules (uq parse) (uq tags))
+
+(define jars 12)
+(define card
+  (markup ",tip
+  Makes ,(number->string jars) jars. Keep them ,em[dry]."))
+#+end_src
+
+=markup= expands at compile time into ordinary calls, so parse errors stop
+compilation and =,(expr)= sees the variables in scope.  With
+=(enable-markup-reader!)= the same text can be written as a =#m<<END= …
+=END= heredoc without quotes.  See =examples/demo.scm=.
+
+=,(expr)= evaluates arbitrary Scheme.  Documents are evaluated with =eval=,
+so only render documents you trust, or evaluate them in a restricted module.
+
+* AI disclosure
+
+Most of the code, tests and documentation in this repository were written by
+Claude, an AI model made by Anthropic, working interactively with Roger
+Farrell.  Roger set the goals and made the design decisions (the comma
+syntax, indentation for children, address-first brackets, the kinds and
+=#:wrap=); Claude proposed alternatives, wrote the implementation and ran
+the tests.  The code has not had an independent line-by-line human review.
+Please review it as you would any other contribution, and report problems
+as issues.
+
+* License
+
+Copyright (C) 2026 Roger Farrell.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version.  See [[file:COPYING][COPYING]].

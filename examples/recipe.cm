@@ -1,0 +1,39 @@
+,recipe
+  ,title Cheeseburger Helper
+  ,photo[cheeseburger-jar.jpg][A half-gallon jar of layered pasta and spices]
+  ,yield 1 half-gallon or 1 half-pint (see tip)
+  ,prep 5 min
+
+  ,ingredients
+    ,ul
+      4 cups pasta (small shells or elbow macaroni)
+
+      1 Tbs tomato powder
+
+      2 Tbs beef bouillon
+
+      ,frac[1/2] cup whole milk powder
+
+      2 tsp dried minced garlic
+
+      1 tsp smoked paprika
+
+      1 tsp Italian seasoning
+
+      ,frac[1/2] tsp salt
+
+      ,frac[1/4] tsp pepper
+
+  ,directions
+    ,ol
+      Place all ingredients into a half-gallon jar or other airtight
+        container. ,em[Optional:] Vacuum seal.
+
+  ,tip
+    If you want to keep the pasta with all the other ingredients, you'll
+    need a half-gallon jar. Alternatively, you can store the powdered
+    ingredients and spices in a half-pint jar.
+
+    This works well if your pasta is packaged in its ,strong[store-bought
+    box]. See our ,link[https://example.com/jars][,em[jar] guide] for
+    sizes ,image[lid.svg][lid icon] and footnote ,em[one][1]. Bare: ,link[https://example.com].
