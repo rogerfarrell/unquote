@@ -168,6 +168,23 @@ own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
 a run of text, and block lines stand on their own; a =block= wrapper (=li=)
 holds everything up to the next blank line, nested blocks included.
 
+The two keywords combine, in either order.  A list that takes attributes:
+
+#+begin_src scheme
+(define-tag block (steps . body) #:wrap li #:attributes attrs
+  `(ol (@ (class "steps") ,@(attribute-list attrs)) ,@body))
+#+end_src
+
+#+begin_example
+,steps[:id fill]
+  Fill the jar
+
+  Seal it
+#+end_example
+
+Like every attribute command, such a block needs its bracket, even if
+empty: =,steps[]=.
+
 * Build scripts
 
 =(uq compile)= compiles =.uq= files to HTML.  The output is a fragment;

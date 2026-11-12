@@ -72,6 +72,19 @@
       "<figure class=\"photo\"><img src=\"jar.jpg\" alt=\"A jar\" width=\"3in\" /></figure>")
 (fails "a ,image[lid.svg :width][lid]" "line 1: ,image: :width needs a value")
 
+;;; #:wrap and #:attributes together
+(define-tag block (steps . body) #:wrap li #:attributes attrs
+  `(ol (@ (class "steps") ,@(attribute-list attrs)) ,@body))
+(define-tag block (note . body) #:attributes attrs #:wrap p
+  `(aside (@ ,@(attribute-list attrs)) ,@body))
+(html ",steps[:id fill]\n  Fill the jar\n\n  Seal it"
+      "<ol class=\"steps\" id=\"fill\"><li>Fill the jar</li><li>Seal it</li></ol>")
+(html ",steps[][Fill the jar]\n\n  Seal it"
+      "<ol class=\"steps\"><li>Fill the jar</li><li>Seal it</li></ol>")
+(html ",note[:id keep][Keep it dry.]\n  Really.\n\n  Second."
+      "<aside id=\"keep\"><p>Keep it dry. Really.</p><p>Second.</p></aside>")
+(fails ",steps\n  x" "line 1: ,steps needs brackets: ,steps[attributes][text]")
+
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
       "<p><a href=\"https://example.com\" title=\"Jar sizes for every recipe\">jars</a></p>")

@@ -52,23 +52,25 @@
       (error "define-tag: only block:block tags take #:wrap" name))
     (hash-set! registry name (list k attributes? wrap))))
 
-;; (define-tag kind (name . body) [#:wrap tag | #:attributes var] expr …)
+;; (define-tag kind (name . body) [#:wrap tag] [#:attributes var] expr …)
 ;;
 ;; Defines the component procedure, registers it with the parser, and
-;; exports it from the module it appears in.
+;; exports it from the module it appears in.  The keywords may be combined,
+;; in either order.
 ;;   #:wrap tag        block:block only: wrap each blank-line group in TAG
 ;;   #:attributes var  the command takes [attributes][text].  VAR is bound
 ;;                     to the attribute list (see parse-attributes) and
-;;                     BODY is the text, e.g.
+;;                     BODY is the text -- or, for a block, its contents.
+;;                     For example:
 ;;                       (define-tag inline (link . body) #:attributes attrs
 ;;                         (let ((href (attribute attrs 'href 0)))
 ;;                           `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
   (syntax-rules ()
     ((_ kind (name . body) #:wrap w #:attributes a expr ...)
-     (syntax-error "define-tag: use #:wrap or #:attributes, not both" name))
+     (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t 'w)))
     ((_ kind (name . body) #:attributes a #:wrap w expr ...)
-     (syntax-error "define-tag: use #:wrap or #:attributes, not both" name))
+     (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t 'w)))
     ((_ kind (name . body) #:wrap w expr ...)
      (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f 'w)))
     ((_ kind (name . body) #:attributes a expr ...)
