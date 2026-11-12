@@ -60,7 +60,20 @@
 (html ",image[lid.svg][lid icon]" "<p><img src=\"lid.svg\" alt=\"lid icon\" /></p>")
 (html "footnote ,em[one][1]" "<p>footnote <em>one</em>[1]</p>")
 (html ",photo[jar.jpg][A jar]" "<figure class=\"photo\"><img src=\"jar.jpg\" alt=\"A jar\" /></figure>")
-(fails "see ,link here" "line 1: ,link needs brackets: ,link[address][words]")
+(fails "see ,link here" "line 1: ,link needs brackets: ,link[attributes][text]")
+
+;;; Attributes: bare values in order, :key value pairs as attributes
+(html ",link[:href https://example.com :title Sizes][jars]"
+      "<p><a href=\"https://example.com\" title=\"Sizes\">jars</a></p>")
+(html ",link[https://example.com :title Sizes][jars]"
+      "<p><a href=\"https://example.com\" title=\"Sizes\">jars</a></p>")
+(html ",image[lid.svg :width 40][lid]" "<p><img src=\"lid.svg\" alt=\"lid\" width=\"40\" /></p>")
+(html ",photo[jar.jpg :width 3in :alt ignored][A jar]"
+      "<figure class=\"photo\"><img src=\"jar.jpg\" alt=\"A jar\" width=\"3in\" /></figure>")
+(fails "a ,image[lid.svg :width][lid]" "line 1: ,image: :width needs a value")
+(check "parse attributes"
+       (eval (car (markup-string->exprs ",link[a b :x 1 c][t]")) (current-module))
+       '(p (a (@ (href "a") (x "1")) "t")))
 
 ;;; block:inline
 (html ",title Cheeseburger\n  Helper" "<h1>Cheeseburger Helper</h1>")

@@ -9,7 +9,8 @@ Read README.org first for what the project is and the editor syntax.
 
 - Editors and writers, who are not programmers.  Their syntax must stay
   lean: commas for commands, indentation for children, brackets only for
-  inline extent and addresses.  No attributes, no quotes, no block closers.
+  inline extent and attributes.  Attributes are rare, by name (=:width 3in=)
+  or as plain words the component interprets.  No quotes, no block closers.
 - The template maintainer, who writes components in Guile Scheme.
 
 Changes that add syntax for editors need the maintainer's agreement.
@@ -51,7 +52,7 @@ the way.  Requires Guile 3.0.
    each group in their =#:wrap= tag (default =p=).  The wrapper's kind
    decides what a group may hold.
 4. =parse-inline=: each run is parsed once, lines joined with newlines, for
-   inline commands, brackets, addresses and =,(expr)= escapes.
+   inline commands, brackets, attributes and =,(expr)= escapes.
 5. The result is one Scheme expression, =(document …)=.  It is evaluated in
    a module that uses the component modules and written with =sxml->xml=.
 
@@ -65,8 +66,9 @@ component modules must be loaded before a document is parsed.
   Aliases are resolved in =register!=; code after registration only sees
   canonical names.
 - Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
-- Address commands (=#:address var=) read =[address]= first and an optional
-  =[text]= second.
+- Attribute commands (=#:attributes var=) read =[attributes]= first and an
+  optional =[text]= second.  The attribute bracket parses to a list of
+  plain-word strings and =(name "value")= pairs; components interpret it.
 - Parse errors are raised with =oops= and start with ="line N: "=.  Report
   the line where the problem starts (where a bracket opened, not where the
   run started).

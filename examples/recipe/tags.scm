@@ -24,8 +24,11 @@
 
 (define-tag block (recipe . body) `(div (@ (class "recipe")) ,@body))
 (define-tag block:inline (title . body) `(h1 ,@body))
-(define-tag block:inline (photo . alt) #:address src
-  `(figure (@ (class "photo")) (img (@ (src ,src) (alt ,(plain alt))))))
+;; ,photo[file][alt] or ,photo[file :width 3in][alt]
+(define-tag block:inline (photo . alt) #:attributes attrs
+  `(figure (@ (class "photo"))
+     (img (@ (src ,(attribute attrs 'src 0)) (alt ,(plain alt))
+             ,@(attribute-list attrs '(src alt))))))
 (define-tag block:inline (yield . body) `(span (@ (class "yield")) "Yield: " ,@body))
 (define-tag block:inline (prep . body)  `(span (@ (class "prep")) "Prep time: " ,@body))
 (define-tag block (ingredients . body) `(section (@ (class "ingredients")) (h2 "Ingredients") ,@body))

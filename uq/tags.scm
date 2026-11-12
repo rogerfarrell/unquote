@@ -24,7 +24,7 @@
   #:export (plain))
 
 ;; The text of a body with any markup dropped, trimmed: for alt text,
-;; addresses and other attribute values.
+;; attribute values.
 (define (plain body) (string-trim-both (apply string-append (filter string? body))))
 
 ;;; structure
@@ -37,9 +37,15 @@
 ;;; inline
 (define-tag inline (em . body)     `(em ,@body))
 (define-tag inline (strong . body) `(strong ,@body))
-(define-tag inline (link . body) #:address href          ; no text: show the address
-  `(a (@ (href ,href)) ,@(if (null? body) (list href) body)))
-(define-tag inline (image . alt) #:address src `(img (@ (src ,src) (alt ,(plain alt)))))
+;; ,link[url][text] or ,link[:href url :title Hint][text]; no text shows the URL
+(define-tag inline (link . body) #:attributes attrs
+  (let ((href (attribute attrs 'href 0)))
+    `(a (@ (href ,href) ,@(attribute-list attrs '(href)))
+        ,@(if (null? body) (list href) body))))
+;; ,image[file][alt] or ,image[:src file :width 40][alt]
+(define-tag inline (image . alt) #:attributes attrs
+  `(img (@ (src ,(attribute attrs 'src 0)) (alt ,(plain alt))
+           ,@(attribute-list attrs '(src alt)))))
 (define-tag word (frac . body)
   (let ((s (plain body)))
     (or (assoc-ref '(("1/2" . "½") ("1/3" . "⅓") ("2/3" . "⅔") ("1/4" . "¼") ("3/4" . "¾")) s)

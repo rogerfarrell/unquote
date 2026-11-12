@@ -17,11 +17,11 @@
 (define-module (uq parse)
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag markup enable-markup-reader!
+  #:export (define-tag attribute attribute-values attribute-list markup enable-markup-reader!
             read-markup-document markup-string->exprs))
 
 ;;; ================= Component registry =================
-;; name -> (kind address? wrap)
+;; name -> (kind attributes? wrap)
 ;; Kinds are  placement:content.
 ;;   block:block   (alias block)   starts a line; holds blank-line-separated groups,
 ;;                                 each wrapped in the tag's #:wrap (default p)
@@ -41,35 +41,37 @@
 (define registry (make-hash-table))
 (define (entry name)    (hash-ref registry name))
 (define (kind-of name)  (and=> (entry name) car))
-(define (address? name) (and=> (entry name) cadr))
+(define (attributes? name) (and=> (entry name) cadr))
 (define (wrap-of name)  (or (and=> (entry name) caddr) 'p))
 
-(define (register! name kind address? wrap)
+(define (register! name kind attributes? wrap)
   (let ((k (canonical-kind kind)))
     (unless (memq k (append block-kinds inline-kinds))
       (error "define-tag: unknown kind" kind))
     (when (and wrap (not (eq? k 'block:block)))
       (error "define-tag: only block:block tags take #:wrap" name))
-    (hash-set! registry name (list k address? wrap))))
+    (hash-set! registry name (list k attributes? wrap))))
 
-;; (define-tag kind (name . body) [#:wrap tag | #:address var] expr …)
+;; (define-tag kind (name . body) [#:wrap tag | #:attributes var] expr …)
 ;;
 ;; Defines the component procedure, registers it with the parser, and
 ;; exports it from the module it appears in.
-;;   #:wrap tag      block:block only: wrap each blank-line group in TAG
-;;   #:address var   the command takes [address][text]; the address is
-;;                   bound to VAR and BODY is the text, e.g.
-;;                     (define-tag inline (link . body) #:address href
-;;                       `(a (@ (href ,href)) ,@body))
+;;   #:wrap tag        block:block only: wrap each blank-line group in TAG
+;;   #:attributes var  the command takes [attributes][text].  VAR is bound
+;;                     to the attribute list (see parse-attributes) and
+;;                     BODY is the text, e.g.
+;;                       (define-tag inline (link . body) #:attributes attrs
+;;                         (let ((href (attribute attrs 'href 0)))
+;;                           `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
   (syntax-rules ()
-    ((_ kind (name . body) #:wrap w #:address a expr ...)
-     (syntax-error "define-tag: use #:wrap or #:address, not both" name))
-    ((_ kind (name . body) #:address a #:wrap w expr ...)
-     (syntax-error "define-tag: use #:wrap or #:address, not both" name))
+    ((_ kind (name . body) #:wrap w #:attributes a expr ...)
+     (syntax-error "define-tag: use #:wrap or #:attributes, not both" name))
+    ((_ kind (name . body) #:attributes a #:wrap w expr ...)
+     (syntax-error "define-tag: use #:wrap or #:attributes, not both" name))
     ((_ kind (name . body) #:wrap w expr ...)
      (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f 'w)))
-    ((_ kind (name . body) #:address a expr ...)
+    ((_ kind (name . body) #:attributes a expr ...)
      (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t #f)))
     ((_ kind (name . body) expr ...)
      (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f #f)))))
@@ -110,6 +112,38 @@
            (set-node-kids! parent (append (node-kids parent) (list node)))
            (loop rest (1+ n) (cdr is) (if (blank? node) stack (cons node stack)))))))))
 
+;;; ================= Attributes =================
+;; The first bracket of an attributes command, e.g. [cheese.jpg :width 3in],
+;; is split on whitespace.  ":key value" becomes (key "value"), ready to drop
+;; into an SXML (@ …) list; any other word stays a string, in order, for the
+;; component to interpret.  So [cheese.jpg :width 3in] -> ("cheese.jpg" (width "3in")).
+(define (parse-attributes str name line)
+  (let loop ((words (remove string-null? (string-split (nl->sp str) #\space))) (acc '()))
+    (match words
+      (() (reverse acc))
+      (((? (lambda (w) (and (> (string-length w) 1) (char=? (string-ref w 0) #\:))) key) . rest)
+       (match rest
+         ((value . rest)
+          (loop rest (cons (list (string->symbol (substring key 1)) value) acc)))
+         (() (oops line ",~a: ~a needs a value" name key))))
+      ((word . rest) (loop rest (cons word acc))))))
+
+;; Helpers for components.
+(define* (attribute attrs key #:optional index)
+  "The value of :KEY in ATTRS; failing that, the INDEXth bare value; else #f."
+  (or (any (lambda (a) (and (pair? a) (eq? (car a) key) (cadr a))) attrs)
+      (and index
+           (let ((bare (filter string? attrs)))
+             (and (< index (length bare)) (list-ref bare index))))))
+
+(define* (attribute-values attrs)
+  "The bare (keyword-less) values in ATTRS, in order."
+  (filter string? attrs))
+
+(define* (attribute-list attrs #:optional (exclude '()))
+  "The :key value pairs in ATTRS as SXML attributes, minus the keys in EXCLUDE."
+  (filter (lambda (a) (and (pair? a) (not (memq (car a) exclude)))) attrs))
+
 ;;; ================= Brackets =================
 (define (matching-bracket s open)      ; index of "]" matching "[" at OPEN, or #f
   (let loop ((j (1+ open)) (depth 0))
@@ -118,21 +152,22 @@
           ((char=? (string-ref s j) #\]) (if (zero? depth) j (loop (1+ j) (1- depth))))
           (else (loop (1+ j) depth)))))
 
-;; Read ",name[…]" / ",name[address][…]" starting at the "[" at OPEN.
-;; Address commands read the address first (as in HTML: <a href=…>text</a>),
-;; then an optional text bracket.  Returns (values text address-or-#f index-after).
+;; Read ",name[…]" / ",name[attributes][…]" starting at the "[" at OPEN.
+;; Attributes commands read the attribute bracket first (as in HTML:
+;; <a href=…>text</a>), then an optional text bracket.
+;; Returns (values text attributes-or-#f index-after).
 (define (read-brackets s open name line)
   (let ((close (matching-bracket s open)))
     (unless close (oops line ",~a[ is never closed with ]" name))
     (let ((first (substring s (1+ open) close))
           (next  (1+ close)))
       (cond
-       ((not (address? name)) (values first #f next))    ; a following "[…]" is just text
+       ((not (attributes? name)) (values first #f next))    ; a following "[…]" is just text
        ((and (< next (string-length s)) (char=? (string-ref s next) #\[))
         (let ((close2 (matching-bracket s next)))
           (unless close2 (oops line "the text after ,~a[...] is never closed with ]" name))
-          (values (substring s (1+ next) close2) (string-delete char-whitespace? first) (1+ close2))))
-       (else (values "" (string-delete char-whitespace? first) next))))))   ; text is optional
+          (values (substring s (1+ next) close2) (parse-attributes first name line) (1+ close2))))
+       (else (values "" (parse-attributes first name line) next))))))   ; text is optional
 
 ;;; ================= Inline text -> parts =================
 ;; S is a whole paragraph or item: its lines joined with "\n".  LINE is the
@@ -142,7 +177,8 @@
 (define (name-end s i) (let scan ((j i)) (if (and (< j (string-length s)) (name-char? (string-ref s j))) (scan (1+ j)) j)))
 (define (nl->sp str) (string-map (lambda (c) (if (char=? c #\newline) #\space c)) str))
 (define (line-at s i line) (+ line (string-count (substring s 0 i) #\newline)))
-(define (call name addr parts) `(,name ,@(if addr (list addr) '()) ,@parts))
+;; ATTRS is #f for commands without attributes; otherwise a quoted list.
+(define (call name attrs parts) `(,name ,@(if attrs `(',attrs) '()) ,@parts))
 
 (define (parse-inline s line)
   (let loop ((i 0) (start 0) (acc '()))
@@ -170,7 +206,7 @@
               (call-with-values (lambda () (read-brackets s ne name here))
                 (lambda (inner addr after)
                   (loop after after (cons (call name addr (parse-inline inner here)) (text-upto i))))))
-             ((address? name) (oops here ",~a needs brackets: ,~a[address][words]" name name))
+             ((attributes? name) (oops here ",~a needs brackets: ,~a[attributes][text]" name name))
              (else                       ; declared extent: next word / rest of line
               (let* ((after (if (and (< ne (string-length s)) (char=? (string-ref s ne) #\space)) (1+ ne) ne))
                      (stop (if (eq? kind 'inline:word) char-whitespace? (lambda (c) (char=? c #\newline))))
@@ -180,7 +216,7 @@
      (else (loop (1+ i) start acc)))))
 
 ;;; ================= Tree -> Scheme expression =================
-;; Is this line a block command?  Returns (name address head-text) or #f.
+;; Is this line a block command?  Returns (name attributes head-text) or #f.
 (define (block-head n)
   (let ((s (node-text n)))
     (and (> (string-length s) 1)
@@ -197,8 +233,8 @@
                     (unless (string-null? (string-trim (substring s after)))
                       (oops (node-line n) "unexpected text after ,~a[...]" name))
                     (list name addr inner))))
-               ((address? name)
-                (oops (node-line n) ",~a needs brackets: ,~a[address][words]" name name))
+               ((attributes? name)
+                (oops (node-line n) ",~a needs brackets: ,~a[attributes][text]" name name))
                (else (list name #f (string-trim (substring s ne))))))
              ((#f) (oops (node-line n) "unknown command ,~a" name))
              (else #f))))))                     ; inline command at line start: text

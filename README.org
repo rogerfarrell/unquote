@@ -101,15 +101,20 @@ guile -L . -L examples tests/run.scm
 - A =[= that does not directly follow a command name is plain text, so
   =[sic]= is safe.
 
-** Links and images
-- The address comes first, as in HTML: =,link[address][text]=,
-  =,image[file][alt text]=, =,photo[file][alt text]=.
-- The text bracket is optional.  A link without text shows its address.
-- Whitespace in the address is removed, so long URLs may wrap.
+** Links, images and other attribute commands
+- Some commands take an attribute bracket first, as in HTML, then an
+  optional text bracket: =,link[address][text]=, =,image[file][alt text]=,
+  =,photo[file][alt text]=.  A link without text shows its address.
+- Words in the attribute bracket are separated by spaces.  A plain word is
+  passed to the command, which decides what it means (for =,link=, the
+  first one is the address).
+- =:name value= sets an attribute by name: =,link[:href https://… :title
+  Sizes][jars]=, =,photo[jar.jpg :width 3in][A jar]=.  The value is one
+  word.
 
-** No attributes
-Editors never write attributes.  Classes, labels and sizes live in the
-component definitions.
+** Attributes are rarely needed
+Editors normally write none: classes, labels and sizes live in the
+component definitions.  =:name value= is there for the occasional case.
 
 * Defining components
 
@@ -135,11 +140,22 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (ul . body) #:wrap li `(ul ,@body))
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
-(define-tag inline       (link . body) #:address href `(a (@ (href ,href)) ,@body))
+(define-tag inline       (link . body) #:attributes attrs
+  (let ((href (attribute attrs 'href 0)))            ; :href, else the first plain word
+    `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
 
-=#:address= makes a command take =[address][text]=: the address is bound
-to the named variable and =body= is the text.
+=#:attributes var= makes a command take =[attributes][text]=.  =var= is
+bound to the attribute bracket as a list: plain words as strings, in order,
+and =:name value= pairs as =(name "value")=, ready to splice into an SXML
+=(@ …)=.  So =[jar.jpg :width 3in]= gives =("jar.jpg" (width "3in"))=, and
+=body= is the text.  Helpers from =(uq parse)=:
+
+- =(attribute attrs 'name [n])= — the value of =:name=, else the /n/th
+  plain word, else =#f=.
+- =(attribute-values attrs)= — the plain words.
+- =(attribute-list attrs ['(excluded …)])= — the =:name value= pairs as SXML
+  attributes.
 
 =#:wrap= names the tag each blank-line group is wrapped in.  The wrapper's
 own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
