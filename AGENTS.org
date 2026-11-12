@@ -21,6 +21,7 @@ Prefer moving complexity into components or the parser.
 |--------------------+------------------------------------------------------------|
 | =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
 | =uq/tags.scm=      | generic components: structure, lists, inline markup        |
+| =uq/compile.scm=   | =compile-uq= and helpers: .uq file -> HTML page, for scripts |
 | =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
 | =examples/recipe/= | =(recipe tags)=, =recipe.uq= and its =build.scm= script   |

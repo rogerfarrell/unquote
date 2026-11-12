@@ -143,6 +143,30 @@ own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
 a run of text, and block lines stand on their own; a =block= wrapper (=li=)
 holds everything up to the next blank line, nested blocks included.
 
+* Build scripts
+
+=(uq compile)= compiles =.uq= files to complete HTML pages, so a build
+script only names its inputs and component modules:
+
+#+begin_src scheme
+(use-modules (uq compile))
+
+(compile-uq "recipe.uq" #:tags '((recipe tags)))   ; -> recipe.html
+#+end_src
+
+- =#:out= sets the output file; the default replaces =.uq= with =.html=.
+- =#:tags= lists extra component modules, loaded before parsing.
+- =#:page= turns the document's SXML into the =html= element.  The
+  default, =default-page=, adds a doctype, charset and viewport, and takes
+  the =<title>= from the first =h1=; it also accepts =#:lang= and
+  =#:stylesheets=.
+- On success =compile-uq= prints =IN -> OUT= and returns =OUT=.  On an
+  error it prints =FILE: line N: message=, writes nothing and returns =#f=.
+
+Lower-level pieces are exported too: =uq-file->expr=, =uq-file->sxml=,
+=component-module=, =page-title= and =write-html-page=.
+=examples/recipe/build.scm= is a complete script.
+
 * Using markup inside Scheme
 
 #+begin_src scheme

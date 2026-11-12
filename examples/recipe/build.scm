@@ -29,55 +29,18 @@ exec guile --no-auto-compile -e main -s "$0" "$@"
     (add-to-load-path (canonicalize-path (string-append here "/../..")))   ; (uq …)
     (add-to-load-path (canonicalize-path (string-append here "/..")))))   ; (recipe …)
 
-(use-modules (uq parse) (uq tags) (recipe tags)
-             (sxml simple) (ice-9 match) (srfi srfi-1))
+(use-modules (uq compile) (ice-9 match))
 
 (define here (dirname (current-filename)))
 
-;; The first <h1> in the page, as plain text, for the <title>.
-(define (page-title tree)
-  (define (text x)
-    (cond ((string? x) x)
-          ((and (pair? x) (eq? (car x) '@)) "")
-          ((pair? x) (string-concatenate (map text (cdr x))))
-          (else "")))
-  (let find ((x tree))
-    (cond ((not (pair? x)) #f)
-          ((eq? (car x) 'h1) (string-trim-both (text x)))
-          (else (any find (cdr x))))))
-
-(define (page body)
-  `(html (@ (lang "en"))
-     (head (meta (@ (charset "utf-8")))
-           (meta (@ (name "viewport") (content "width=device-width, initial-scale=1")))
-           (title ,(or (page-title body) "Recipe")))
-     (body ,body)))
-
-(define (compile-uq in out)
-  (let* ((expr (catch #t
-                 (lambda () (call-with-input-file in read-markup-document))
-                 (lambda (key . args)
-                   ;; parse errors read "line N: …"; prefix the file name
-                   (match args
-                     ((_ (? string? fmt) (? list? fargs) . _)
-                      (format (current-error-port) "~a: ~a~%" in (apply format #f fmt fargs)))
-                     (_ (format (current-error-port) "~a: ~a ~s~%" in key args)))
-                   (exit 1))))
-         (body (eval expr (current-module))))
-    (call-with-output-file out
-      (lambda (port)
-        (set-port-encoding! port "UTF-8")
-        (display "<!DOCTYPE html>\n" port)
-        (sxml->xml (page body) port)
-        (newline port)))
-    (format #t "~a -> ~a~%" in out)))
+(define* (build in #:optional out)
+  (unless (compile-uq in #:out out #:tags '((recipe tags)))
+    (exit 1)))
 
 ;; Entry point, called by the -e main in the header with (command-line).
 (define (main args)
   (match args
-    ((_)        (compile-uq (string-append here "/recipe.uq") (string-append here "/recipe.html")))
-    ((_ in)     (compile-uq in (string-append (if (string-suffix? ".uq" in)
-                                                  (string-drop-right in 3) in)
-                                              ".html")))
-    ((_ in out) (compile-uq in out))
+    ((_)        (build (string-append here "/recipe.uq")))
+    ((_ in)     (build in))
+    ((_ in out) (build in out))
     (_ (format (current-error-port) "usage: build.scm [INPUT.uq [OUTPUT.html]]~%") (exit 2))))

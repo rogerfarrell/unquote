@@ -21,20 +21,13 @@
 ;; The document is evaluated in a module that uses (uq tags) and each
 ;; --tags module, later ones taking precedence; e.g.
 ;;   guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.uq
-(use-modules (uq parse) (ice-9 match) (ice-9 pretty-print) (sxml simple))
+(use-modules (uq parse) (uq compile) (ice-9 match) (ice-9 pretty-print) (sxml simple))
 (fluid-set! %default-port-encoding "UTF-8")
 (set-port-encoding! (current-output-port) "UTF-8")
 
 (define (usage)
   (format (current-error-port) "usage: unquote.scm [--expr] [--tags \"(MODULE NAME)\"]... FILE~%")
   (exit 2))
-
-;; Load the component modules first: the parser needs their tags registered.
-(define (component-module specs)
-  (let ((m (make-fresh-user-module)))
-    (for-each (lambda (spec) (module-use! m (resolve-interface spec)))
-              (cons '(uq tags) specs))
-    m))
 
 (define (render file show? specs)
   (let* ((env  (component-module specs))

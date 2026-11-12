@@ -5,7 +5,7 @@
 ;;; Uses the generic (uq tags) and the example (recipe tags) components.
 ;;; Each case is markup -> expected HTML, or markup -> expected error text.
 
-(use-modules (uq parse) (uq tags) (recipe tags) (sxml simple)
+(use-modules (uq parse) (uq tags) (recipe tags) (sxml simple) (ice-9 textual-ports)
              (ice-9 match) (srfi srfi-1))
 (set-port-encoding! (current-output-port) "UTF-8")
 
@@ -85,6 +85,36 @@
 
 ;;; Scheme escape
 (html "Total: ,(number->string (+ 2 3)) items" "<p>Total: 5 items</p>")
+
+;;; (uq compile)
+(use-modules (uq compile))
+(let* ((dir (string-append (or (getenv "TMPDIR") "/tmp") "/uq-test-" (number->string (getpid))))
+       (good (string-append dir "/good.uq"))
+       (bad  (string-append dir "/bad.uq")))
+  (mkdir dir)
+  (with-output-to-file good (lambda () (display ",recipe\n  ,title Cheese ,em[Helper]\n")))
+  (with-output-to-file bad  (lambda () (display ",recipe\n  ,titel oops\n")))
+  (let ((out (with-output-to-string
+               (lambda () (compile-uq good #:tags '((recipe tags)))))))
+    (check "compile-uq reports" out (string-append good " -> " dir "/good.html\n")))
+  (check "compile-uq page"
+         (call-with-input-file (string-append dir "/good.html")
+           (lambda (p) (set-port-encoding! p "UTF-8") (get-string-all p)))
+         (string-append "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\" />"
+                        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
+                        "<title>Cheese Helper</title></head><body><article><div class=\"recipe\">"
+                        "<h1>Cheese <em>Helper</em></h1></div></article></body></html>\n"))
+  (let* ((err (open-output-string))
+         (result (with-error-to-port err
+                   (lambda () (compile-uq bad #:tags '((recipe tags)))))))
+    (check "compile-uq error result" result #f)
+    (check "compile-uq error message" (get-output-string err)
+           (string-append bad ": line 2: unknown command ,titel\n"))
+    (check "compile-uq writes nothing on error"
+           (file-exists? (string-append dir "/bad.html")) #f))
+  (for-each (lambda (f) (when (file-exists? f) (delete-file f)))
+            (list good bad (string-append dir "/good.html")))
+  (rmdir dir))
 
 (if (zero? failures)
     (format #t "all tests passed~%")
