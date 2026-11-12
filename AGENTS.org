@@ -70,9 +70,9 @@ component modules must be loaded before a document is parsed.
   optional =[text]= second.  The attribute bracket parses to a list of
   plain-word strings and =(name "value")= pairs; components interpret it.
   Values may be "double-quoted" Scheme strings (read with =read=, never a
-  :key).  A quoted value keeps =\n= where it wrapped; =attribute= and
-  =attribute-list= make it a space, =attribute-address= removes it.  The
-  bracket matcher skips quoted strings in attribute brackets only.
+  :key).  A quoted value must close on its own line; the bracket matcher
+  skips quoted strings in attribute brackets only, and stops at a line
+  break inside one.
 - Find the end of a datum read from a string with =read-datum-at=, not
   =ftell=: string ports count bytes, so =ftell= is wrong after non-ASCII.
 - Parse errors are raised with =oops= and start with ="line N: "=.  Report

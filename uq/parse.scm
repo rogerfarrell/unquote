@@ -17,7 +17,7 @@
 (define-module (uq parse)
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 textual-ports) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag attribute attribute-address attribute-values attribute-list markup enable-markup-reader!
+  #:export (define-tag attribute attribute-values attribute-list markup enable-markup-reader!
             read-markup-document markup-string->exprs))
 
 ;;; ================= Component registry =================
@@ -130,9 +130,7 @@
 ;;
 ;; A word may be a "double-quoted" Scheme string, read with Guile's reader
 ;; (\" and \\ escapes), to hold spaces: [:title "Jar sizes"].  A quoted
-;; string is never a :key.  It may wrap across lines; the parsed value keeps
-;; a newline where it wrapped (indentation is already gone), and the helpers
-;; below decide: text gets a space there, an address gets nothing.
+;; string is never a :key, and it must close on the line it opens on.
 
 ;; STR -> list of tokens: plain words as strings, quoted strings as (q . str)
 (define (attribute-tokens str name line)
@@ -146,7 +144,7 @@
               (lambda ()
                 (catch #t
                   (lambda () (read-datum-at str i))
-                  (lambda _ (oops (line-at str i line) ",~a: a \" is never closed" name))))
+                  (lambda _ (oops (line-at str i line) ",~a: a \" is not closed on the same line" name))))
             (lambda (value end)
               (loop end (cons (cons 'q value) acc)))))
          (else
@@ -167,44 +165,38 @@
          (() (oops line ",~a: ~a needs a value" name key))))
       ((t . rest) (loop rest (cons (value t) acc))))))
 
-;; Helpers for components.  Values come back as text (a wrap becomes a
-;; space), except from attribute-address (a wrap is removed, so a long URL
-;; can be split across lines).
-(define (raw-attribute attrs key index)
+;; Helpers for components.
+(define* (attribute attrs key #:optional index)
+  "The value of :KEY in ATTRS; failing that, the INDEXth bare value; else #f."
   (or (any (lambda (a) (and (pair? a) (eq? (car a) key) (cadr a))) attrs)
       (and index
            (let ((bare (filter string? attrs)))
              (and (< index (length bare)) (list-ref bare index))))))
 
-(define* (attribute attrs key #:optional index)
-  "The value of :KEY in ATTRS; failing that, the INDEXth bare value; else #f."
-  (and=> (raw-attribute attrs key index) nl->sp))
-
-(define* (attribute-address attrs key #:optional index)
-  "Like attribute, but a value wrapped across lines is joined without a space."
-  (and=> (raw-attribute attrs key index) (lambda (v) (string-delete #\newline v))))
-
 (define* (attribute-values attrs)
   "The bare (keyword-less) values in ATTRS, in order."
-  (map nl->sp (filter string? attrs)))
+  (filter string? attrs))
 
 (define* (attribute-list attrs #:optional (exclude '()))
   "The :key value pairs in ATTRS as SXML attributes, minus the keys in EXCLUDE."
-  (filter-map (lambda (a) (and (pair? a) (not (memq (car a) exclude))
-                               (list (car a) (nl->sp (cadr a)))))
-              attrs))
+  (filter (lambda (a) (and (pair? a) (not (memq (car a) exclude)))) attrs))
 
 ;;; ================= Brackets =================
 ;; Index of the "]" matching the "[" at OPEN, or #f.  With QUOTES?, a
-;; "double-quoted" string is skipped whole, so [:title "see [1]"] works,
-;; and an unclosed quote gives (quote INDEX-OF-THE-QUOTE).
+;; "double-quoted" string is skipped whole, so [:title "see [1]"] works.
+;; A quote must close on its own line; if it does not, the result is
+;; (quote INDEX-OF-THE-QUOTE).
 (define* (matching-bracket s open #:optional quotes?)
   (let loop ((j (1+ open)) (depth 0))
     (cond ((>= j (string-length s)) #f)
           ((and quotes? (char=? (string-ref s j) #\"))
            (let skip ((k (1+ j)))
              (cond ((>= k (string-length s)) (list 'quote j))
-                   ((char=? (string-ref s k) #\\) (skip (+ k 2)))
+                   ((char=? (string-ref s k) #\newline) (list 'quote j))
+                   ((char=? (string-ref s k) #\\)       ; an escape, but not of a line break
+                    (if (and (< (1+ k) (string-length s)) (char=? (string-ref s (1+ k)) #\newline))
+                        (list 'quote j)
+                        (skip (+ k 2))))
                    ((char=? (string-ref s k) #\") (loop (1+ k) depth))
                    (else (skip (1+ k))))))
           ((char=? (string-ref s j) #\[) (loop (1+ j) (1+ depth)))
@@ -219,7 +211,7 @@
   (let ((close (matching-bracket s open (attributes? name))))
     (match close
       (('quote q) (oops (+ line (string-count (substring s open q) #\newline))   ; LINE is the bracket's
-                        ",~a: a \" is never closed" name))
+                        ",~a: a \" is not closed on the same line" name))
       (#f (oops line ",~a[ is never closed with ]" name))
       (_ #t))
     (let ((first (substring s (1+ open) close))
