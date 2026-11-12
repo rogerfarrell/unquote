@@ -1,3 +1,28 @@
+# Guile
 *.go
-*~
+
+# Generated pages
 *.html
+
+# Emacs: backups, auto-saves, lock files, session state
+*~
+\#*\#
+.\#*
+auto-save-list/
+tramp
+/.emacs.desktop
+/.emacs.desktop.lock
+*_flymake.*
+flycheck_*.el
+
+# Vim: swap files, persistent undo, sessions, netrw history
+[._]*.s[a-v][a-z]
+!*.svg
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+[._]*.un~
+Session.vim
+Sessionx.vim
+.netrwhist
