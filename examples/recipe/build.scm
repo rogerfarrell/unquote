@@ -34,7 +34,7 @@ exec guile --no-auto-compile -e main -s "$0" "$@"
 (define here (dirname (current-filename)))
 
 (define* (build in #:optional out)
-  (unless (compile-uq in #:out out #:tags '((recipe tags)))
+  (unless (compile-uq in #:out out #:tags '((recipe tags)) #:indent #t)
     (exit 1)))
 
 ;; Entry point, called by the -e main in the header with (command-line).

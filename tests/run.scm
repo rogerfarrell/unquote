@@ -153,6 +153,30 @@
             (list good bad (string-append dir "/good.html")))
   (rmdir dir))
 
+;;; write-sxml: indentation only where it cannot change rendering
+(let ((doc '(body
+             (p (em "a") (strong "b"))
+             (div (span "x") (span "y") (p "block") (span "z"))
+             (ul (li (a (@ (href "#")) "only link")) (li "text ,em" (em "x")))
+             (pre (code "  keep\n    this"))
+             (div (@ (title "a \"q\" <v> & m")) (p "esc")))))
+  (check "write-sxml without #:indent is sxml->xml"
+         (with-output-to-string (lambda () (write-sxml doc)))
+         (with-output-to-string (lambda () (sxml->xml doc))))
+  (check "write-sxml #:indent"
+         (with-output-to-string (lambda () (write-sxml doc #:indent #t)))
+         (string-append
+          "<body>\n"
+          "  <p>\n    <em>a</em><strong>b</strong>\n  </p>\n"
+          "  <div>\n    <span>x</span><span>y</span>\n    <p>block</p>\n    <span>z</span>\n  </div>\n"
+          "  <ul>\n    <li>\n      <a href=\"#\">only link</a>\n    </li>\n    <li>text ,em<em>x</em></li>\n  </ul>\n"
+          "  <pre><code>  keep\n    this</code></pre>\n"
+          "  <div title=\"a &quot;q&quot; &lt;v&gt; &amp; m\">\n    <p>esc</p>\n  </div>\n"
+          "</body>"))
+  (check "write-sxml #:indent 4"
+         (with-output-to-string (lambda () (write-sxml '(ul (li "a")) #:indent 4)))
+         "<ul>\n    <li>a</li>\n</ul>"))
+
 (if (zero? failures)
     (format #t "all tests passed~%")
     (begin (format #t "~a failed~%" failures) (exit 1)))

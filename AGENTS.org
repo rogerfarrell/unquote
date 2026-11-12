@@ -88,6 +88,10 @@ component modules must be loaded before a document is parsed.
   =(uq parse)= and, for helpers such as =plain=, =(uq tags)=.
 - =define-tag= exports the component from the
   module they appear in; do not add a separate export.
+- =write-sxml #:indent= must never change rendering.  Only elements that
+  are not phrasing or =pre=-like and whose children are all elements get
+  line breaks; runs of phrasing siblings share a line.  Check changes by
+  comparing minified and indented pages in a browser (text and pixels).
 - Components return SXML.  Empty non-void elements serialise as =<em />=,
   which browsers treat as an open tag; avoid producing them.
 

@@ -30,7 +30,7 @@
   #:use-module (srfi srfi-1)
   #:export (component-module
             uq-file->expr uq-file->sxml
-            page-title default-page write-html-page
+            page-title default-page write-sxml write-html-page
             compile-uq uq-error-message))
 
 (define (component-module tags)
@@ -74,11 +74,106 @@ first h1."
            ,@(map (lambda (href) `(link (@ (rel "stylesheet") (href ,href)))) stylesheets))
      (body ,body)))
 
-(define (write-html-page sxml port)
-  "Write SXML (an html element) to PORT as UTF-8 with an HTML5 doctype."
+;;; Indented output
+;;
+;; sxml->xml writes everything on one line, and has no option to indent.
+;; Whitespace in HTML text is significant, so indentation is added only
+;; where it cannot change the rendering: an element's children go on their
+;; own lines when they are all elements and the element itself is not
+;; phrasing (inline) content or pre-formatted.  Neighbouring phrasing
+;; children share one line with nothing between them, since a line break
+;; there would show as a space; at the start or end of a line next to a
+;; block, the break is collapsed away.  Anything else -- a p or li with
+;; text, an em, a pre -- is written on one line by sxml->xml, as before.
+
+(define phrasing-tags
+  '(a abbr audio b bdi bdo br button canvas cite code data datalist del dfn
+    em embed i iframe img input ins kbd label map mark math meter noscript
+    object output picture progress q ruby s samp select slot small span
+    strong sub sup svg template textarea time u var video wbr))
+(define verbatim-tags '(pre textarea script style))
+
+(define (element? x)
+  (and (pair? x) (symbol? (car x)) (not (memq (car x) '(@ *TOP* *ENTITY* *PI* *COMMENT*)))))
+(define (phrasing? x) (and (element? x) (memq (car x) phrasing-tags) #t))
+
+;; SXML allows nested lists of nodes; flatten them.
+(define (node-list x)
+  (cond ((null? x) '())
+        ((and (pair? x) (not (symbol? (car x)))) (append-map node-list x))
+        (else (list x))))
+
+(define (attributes+children el)
+  (let ((rest (cdr el)))
+    (if (and (pair? rest) (pair? (car rest)) (eq? (caar rest) '@))
+        (values (car rest) (node-list (cdr rest)))
+        (values #f (node-list rest)))))
+
+(define (indentable? el)
+  (and (element? el)
+       (not (memq (car el) phrasing-tags))
+       (not (memq (car el) verbatim-tags))
+       (call-with-values (lambda () (attributes+children el))
+         (lambda (attrs kids)
+           (and (pair? kids) (every element? kids))))))
+
+;; KIDS grouped into lines: each block element alone, each run of
+;; neighbouring phrasing elements together.
+(define (lines kids)
+  (let loop ((kids kids) (run '()) (out '()))
+    (define (flush) (if (null? run) out (cons (reverse run) out)))
+    (cond ((null? kids) (reverse (flush)))
+          ((phrasing? (car kids)) (loop (cdr kids) (cons (car kids) run) out))
+          (else (loop (cdr kids) '() (cons (list (car kids)) (flush)))))))
+
+;; The open and close tags of EL, written by sxml->xml around a placeholder
+;; so attribute escaping stays sxml->xml's own.
+(define placeholder "uq-children-placeholder-7f3a")
+(define (open+close-tags el attrs)
+  (let* ((s (call-with-output-string
+              (lambda (p) (sxml->xml `(,(car el) ,@(if attrs (list attrs) '()) ,placeholder) p))))
+         (i (string-contains s placeholder)))
+    (values (substring s 0 i) (substring s (+ i (string-length placeholder))))))
+
+(define (write-indented node depth step port)
+  (define (pad d) (display (make-string (* d step) #\space) port))
+  (pad depth)
+  (if (indentable? node)
+      (call-with-values (lambda () (attributes+children node))
+        (lambda (attrs kids)
+          (call-with-values (lambda () (open+close-tags node attrs))
+            (lambda (open close)
+              (display open port)
+              (newline port)
+              (for-each (lambda (line)
+                          (if (null? (cdr line))
+                              (write-indented (car line) (1+ depth) step port)
+                              (begin (pad (1+ depth))
+                                     (for-each (lambda (k) (sxml->xml k port)) line)))
+                          (newline port))
+                        (lines kids))
+              (pad depth)
+              (display close port)))))
+      (sxml->xml node port)))
+
+(define* (write-sxml sxml #:optional (port (current-output-port)) #:key (indent #f))
+  "Like sxml->xml, but with INDENT (#t for 2, or a number of spaces) put
+block structure on indented lines.  Text and inline markup are unchanged."
+  (let ((step (cond ((eq? indent #t) 2) ((integer? indent) indent) (else #f))))
+    (if step
+        (let ((nodes (node-list sxml)))
+          (for-each (lambda (n i)
+                      (unless (zero? i) (newline port))
+                      (write-indented n 0 step port))
+                    nodes (iota (length nodes))))
+        (sxml->xml sxml port))))
+
+(define* (write-html-page sxml port #:key (indent #f))
+  "Write SXML (an html element) to PORT as UTF-8 with an HTML5 doctype.
+INDENT is passed to write-sxml."
   (set-port-encoding! port "UTF-8")
   (display "<!DOCTYPE html>\n" port)
-  (sxml->xml sxml port)
+  (write-sxml sxml port #:indent indent)
   (newline port))
 
 ;;; Compiling
@@ -92,16 +187,17 @@ first h1."
 (define (default-output in)
   (string-append (if (string-suffix? ".uq" in) (string-drop-right in 3) in) ".html"))
 
-(define* (compile-uq in #:key out (tags '()) (page default-page))
+(define* (compile-uq in #:key out (tags '()) (page default-page) (indent #f))
   "Compile the .uq file IN to the HTML file OUT (default: IN with .html).
-PAGE turns the document's SXML into the html element.  On success,
+PAGE turns the document's SXML into the html element.  INDENT (#t, or a
+number of spaces) writes indented HTML; see write-sxml.  On success,
 report IN -> OUT and return OUT.  On an error, report FILE: MESSAGE on
 the error port, write nothing, and return #f."
   (define target (or out (default-output in)))
   (catch #t
     (lambda ()
       (let ((html (page (uq-file->sxml in #:tags tags))))   ; finish before opening OUT
-        (call-with-output-file target (lambda (port) (write-html-page html port)))
+        (call-with-output-file target (lambda (port) (write-html-page html port #:indent indent)))
         (format #t "~a -> ~a~%" in target)
         target))
     (lambda (key . args)

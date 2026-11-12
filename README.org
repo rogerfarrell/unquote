@@ -185,11 +185,18 @@ script only names its inputs and component modules:
   default, =default-page=, adds a doctype, charset and viewport, and takes
   the =<title>= from the first =h1=; it also accepts =#:lang= and
   =#:stylesheets=.
+- =#:indent= (=#t= for two spaces, or a number) writes indented HTML
+  instead of one long line.  Indentation is added only where it cannot
+  change the rendering: elements whose children are all elements are
+  broken onto lines, neighbouring inline elements stay together on one
+  line, and anything containing text, inline markup or =pre= is written
+  as is.  =examples/recipe/build.scm= uses it.
 - On success =compile-uq= prints =IN -> OUT= and returns =OUT=.  On an
   error it prints =FILE: line N: message=, writes nothing and returns =#f=.
 
 Lower-level pieces are exported too: =uq-file->expr=, =uq-file->sxml=,
-=component-module=, =page-title= and =write-html-page=.
+=component-module=, =page-title=, =write-html-page= and =write-sxml=
+(=sxml->xml= with an optional =#:indent=).
 =examples/recipe/build.scm= is a complete script.
 
 * Using markup inside Scheme
