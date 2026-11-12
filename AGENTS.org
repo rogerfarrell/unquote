@@ -75,6 +75,12 @@ component modules must be loaded before a document is parsed.
   =#:default-wrap #t=; =(uq tags)= declares =p=.  With none, loose text
   is a parse error.
 - Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
+  =#:wrap= is a tag, a list of tags (the first wraps; a group that is a
+  lone listed tag passes through), or =#f= (no wrapper: text stays inline,
+  neighbouring inline groups joined by a space).  The registry stores
+  =unset=, =inline= or a list; =wrap-of= turns =unset= into the default.
+  Wraps do not cascade: an implicit wrapper gets the group's content
+  directly, without applying its own =#:wrap=.
   =#:wrap= combines with either attributes option, in any order.
 - =#:attributes var=: optional; without brackets the command gets ='()=,
   inline or block.  =#:required-attributes var=: the parser rejects a

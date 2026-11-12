@@ -14,7 +14,7 @@
 ;;; You should have received a copy of the GNU General Public License
 ;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-;;; (uq tags) -- the generic components: paragraphs, lists and
+;;; (uq tags) -- the generic components: paragraphs, lists, tables and
 ;;; inline markup.  Project-specific components go in their own module;
 ;;; see examples/recipe/tags.scm.
 
@@ -32,6 +32,15 @@
 (define-tag block (ul . body) #:wrap li `(ul ,@body))
 (define-tag block (ol . body) #:wrap li `(ol ,@body))
 (define-tag block (li . body) `(li ,@body))
+
+;;; tables: rows are explicit ,tr; in a row each blank-line group is a
+;;; cell, a td unless it is a lone ,th.  A cell's text stays inline, and a
+;;; cell may hold blocks such as lists.  Loose text directly in ,table is
+;;; not wrapped; it gives invalid HTML, which is left to the editor.
+(define-tag block (table . body) `(table ,@body))
+(define-tag block (tr . body) #:wrap (td th) `(tr ,@body))
+(define-tag block (td . body) #:wrap #f `(td ,@body))
+(define-tag block (th . body) #:wrap #f `(th ,@body))
 
 ;;; inline
 (define-tag inline (em . body)     `(em ,@body))

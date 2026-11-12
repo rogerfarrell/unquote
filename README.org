@@ -91,6 +91,27 @@ guile -L . -L examples tests/run.scm
     The second paragraph.
 #+end_example
 
+** Tables
+Rows are =,tr= commands.  Inside a row, each blank-line group is a cell;
+a cell that is just a =,th= is a header cell.  A cell may wrap across
+lines and may hold a list.
+
+#+begin_example
+,table
+  ,tr
+    ,th Ingredient
+
+    ,th Amount
+  ,tr
+    Pasta (small
+    shells)
+
+    4 cups
+#+end_example
+
+Text directly inside =,table=, outside any =,tr=, is not turned into a
+row; it produces invalid HTML.
+
 ** Inline commands
 - =,em[some words]= covers exactly the bracketed text.  Brackets nest and may
   span lines; balanced brackets inside are plain text.
@@ -129,7 +150,8 @@ component definitions.  =:name value= is there for the occasional case.
 * Defining components
 
 =(uq tags)= provides the generic components: =p=, =ul=, =ol=,
-=li=, =em=, =strong=, =link=, =image= and =frac=.  Anything specific to a
+=li=, =table=, =tr=, =td=, =th=, =em=, =strong=, =link=, =image= and
+=frac=.  Anything specific to a
 kind of page goes in a module of its own; =examples/recipe/tags.scm=
 defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
 =ingredients=, =directions= and =tip=.
@@ -176,6 +198,18 @@ and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
 a run of text, and block lines stand on their own; a =block= wrapper (=li=)
 holds everything up to the next blank line, nested blocks included.
+
+=#:wrap= also takes a list, =#:wrap (td th)=: the first tag wraps each
+group, and a group that is just one of the listed tags -- a lone =,th= in
+a row -- is left as it is.  (A single tag always passes itself through: a
+lone =,li= in a list is not wrapped in another =li=.)  =#:wrap #f= means
+no wrapper: the block's text stays inline, groups joined by a space, as
+in a table cell:
+
+#+begin_src scheme
+(define-tag block (tr . body) #:wrap (td th) `(tr ,@body))
+(define-tag block (td . body) #:wrap #f `(td ,@body))
+#+end_src
 
 Where a block has no =#:wrap=, and at the top level of a document, loose
 text goes in the /default wrapper/: the block tag declared with

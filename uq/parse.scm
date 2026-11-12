@@ -49,17 +49,35 @@
 ;; #:default-wrap #t -- (uq tags) declares p -- the latest declaration
 ;; winning.  The parser names no component itself.
 (define default-wrap #f)
-(define (wrap-of name)  (or (and=> (entry name) caddr) default-wrap))
 
+;; How a block wraps its loose text, as convert-children takes it:
+;;   (tag other …)  wrap each group in TAG; a group that is a lone OTHER
+;;                  (or TAG) passes through unwrapped
+;;   inline         no wrapper: the text stays inline in the block
+;;   #f             no wrapper declared anywhere: loose text is an error
+(define (default-wraps) (and default-wrap (list default-wrap)))
+(define (wrap-of name)
+  (match (and=> (entry name) caddr)
+    ((or #f 'unset) (default-wraps))
+    (w w)))
+
+;; WRAP comes from the macro: 0 when #:wrap was not given, #f for #:wrap #f,
+;; a tag, or a list of tags.
 (define (register! name kind attributes wrap default?)
-  (let ((k (canonical-kind kind)))
+  (let ((k (canonical-kind kind))
+        (w (match wrap
+             (0 'unset)
+             (#f 'inline)
+             ((? symbol? tag) (list tag))
+             (((? symbol?) ..1) wrap)
+             (_ (error "define-tag: #:wrap takes a tag, a list of tags, or #f" name)))))
     (unless (memq k (append block-kinds inline-kinds))
       (error "define-tag: unknown kind" kind))
-    (when (and wrap (not (eq? k 'block:block)))
+    (when (and (not (eq? w 'unset)) (not (eq? k 'block:block)))
       (error "define-tag: only block:block tags take #:wrap" name))
     (when (and default? (not (memq k block-kinds)))
       (error "define-tag: only block tags can be the #:default-wrap" name))
-    (hash-set! registry name (list k attributes wrap))
+    (hash-set! registry name (list k attributes w))
     (when default? (set! default-wrap name))))
 
 ;; (define-tag kind (name . body) [option …] expr …)
@@ -67,6 +85,9 @@
 ;; Defines the component procedure, registers it with the parser, and
 ;; exports it from the module it appears in.  Options, in any order:
 ;;   #:wrap tag                 block:block only: wrap each blank-line group in TAG
+;;   #:wrap (tag other …)       the same, but a group that is a lone ,other
+;;                              passes through unwrapped (a ,th in a row)
+;;   #:wrap #f                  no wrapper: loose text stays inline (a cell)
 ;;   #:default-wrap #t          this block tag wraps loose text wherever no
 ;;                              #:wrap says otherwise, including the top
 ;;                              level of a document; (uq tags) declares p
@@ -84,9 +105,9 @@
 (define-syntax define-tag
   (syntax-rules ()
     ((_ kind (name . body) . rest)
-     (define-tag/options kind name body #f #f #f #f rest))))
+     (define-tag/options kind name body 0 #f #f #f rest))))   ; 0: no #:wrap given
 
-;; Collects the options, then defines.  W: wrap tag or #f; A: the attribute
+;; Collects the options, then defines.  W: the #:wrap value, or 0; A: the attribute
 ;; variable or #f; M: optional, required or #f; D: default wrapper?
 (define-syntax define-tag/options
   (syntax-rules ()
@@ -98,7 +119,7 @@
      (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
     ((_ k n b w a m d (#:required-attributes . rest))
      (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
-    ((_ k n b #f a m d (#:wrap w . rest))
+    ((_ k n b 0 a m d (#:wrap w . rest))
      (define-tag/options k n b w a m d rest))
     ((_ k n b w a m d (#:wrap . rest))
      (syntax-error "define-tag: #:wrap given twice" n))
@@ -106,12 +127,8 @@
      (define-tag/options k n b w a m d rest))
     ((_ k n b w a m d (#:default-wrap . rest))
      (syntax-error "define-tag: #:default-wrap given twice" n))
-    ((_ k n b #f #f #f d (expr ...))
-     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f #f d)))
-    ((_ k n b w #f #f d (expr ...))
-     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f 'w d)))
-    ((_ k n b #f a m d (expr ...))
-     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm #f d)))
+    ((_ k n b w #f m d (expr ...))
+     (begin (define (n . b) expr ...) (export n) (register! 'n 'k 'm 'w d)))
     ((_ k n b w a m d (expr ...))
      (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm 'w d)))))
 
@@ -443,13 +460,16 @@
   (parse-inline (string-join (map text-string nodes) "\n") (node-line (car nodes))))
 
 ;; KIDS of a block:block, grouped by blank lines and wrapped in WRAP.
+;; WRAP is as wrap-of returns it.
 (define (convert-children kids wrap)
-  (if (not wrap)
-      (unwrapped kids)
-      (case (kind-of wrap)
-        ((block:inline) (inline-groups kids wrap))
-        ((block:block)  (block-groups kids wrap))
-        (else (error (format #f "#:wrap ~a must be a block:block or block:inline tag" wrap))))))
+  (match wrap
+    (#f (unwrapped kids))
+    ('inline (block-groups kids #f '()))
+    ((primary . _)
+     (case (kind-of primary)
+       ((block:inline) (inline-groups kids primary))
+       ((block:block)  (block-groups kids primary wrap))
+       (else (error (format #f "#:wrap ~a must be a block:block or block:inline tag" primary)))))))
 
 ;; no wrapper at all: blocks are fine, loose text is an error
 (define (unwrapped kids)
@@ -475,16 +495,19 @@
              ((block-head k)  (loop rest '() (cons (convert-block k) (flush))))
              (else            (loop rest (cons k run) out)))))))
 
-;; wrapper holds blocks too (li): everything up to a blank line is one group
-(define (block-groups kids wrap)
-  (define (group->call group)
+;; wrapper holds blocks too (li): everything up to a blank line is one group.
+;; A group that is a lone block named in PASS (,li in a list, ,th in a row)
+;; is not wrapped again.  With no WRAP, each group's parts are spliced in
+;; place, groups separated by a space.  Returns a list of nodes.
+(define (block-groups kids wrap pass)
+  (define (group->nodes group)
     (match group
-      (((? block-head k)) (=> skip)              ; a lone ,li needs no second li
-       (if (eq? (car (block-head k)) wrap) (convert-block k) (skip)))
+      (((? block-head k)) (=> skip)
+       (if (memq (car (block-head k)) pass) (list (convert-block k)) (skip)))
       (_ (let loop ((nodes group) (run '()) (parts '()))
            (define (flush) (if (null? run) parts (append parts (run-parts (reverse run)))))
            (match nodes
-             (() (call wrap #f (flush) (node-line (car group))))
+             (() (if wrap (list (call wrap #f (flush) (node-line (car group)))) (flush)))
              ((k . rest)
               (if (block-head k)
                   (loop rest '() (append (flush) (list (convert-block k))))
@@ -493,11 +516,30 @@
                         (loop rest (cons k run) parts)
                         (loop rest '() (append parts (run-parts (reverse (cons k run)))
                                                (map convert-block nested))))))))))))
-  (let loop ((kids kids) (group '()) (out '()))
-    (define (flush) (if (null? group) out (cons (group->call (reverse group)) out)))
+  (let loop ((kids kids) (group '()) (out '()))          ; OUT: list of node lists, newest first
+    (define (flush) (if (null? group) out (cons (group->nodes (reverse group)) out)))
     (match kids
-      (() (reverse (flush)))
+      (() (let ((groups (reverse (flush))))
+            (if wrap
+                (concatenate groups)
+                (join-inline-groups groups))))
       ((k . rest) (if (blank? k) (loop rest '() (flush)) (loop rest (cons k group) out))))))
+
+;; Unwrapped groups run together, so text from neighbouring groups gets a
+;; space between them -- but not where a block ends or starts.
+(define (join-inline-groups groups)
+  (define (inline? x)                     ; a string, inline call or escape
+    (match x
+      ((('@ ('uq 'parse) 'at-line) _ ('lambda () (name . _)))
+       (not (and (symbol? name) (memq (kind-of name) block-kinds))))
+      (_ #t)))
+  (let loop ((groups (remove null? groups)) (out '()))
+    (match groups
+      (() out)
+      ((g . rest)
+       (loop rest (if (and (pair? out) (inline? (last out)) (inline? (car g)))
+                      (append out '(" ") g)
+                      (append out g)))))))
 
 ;; The head run: text on the command's own line plus the indented text
 ;; lines straight after it, up to the first blank line or block.
@@ -529,7 +571,7 @@
           (call name addr (convert-children kids (wrap-of name)) (node-line n))))))))
 
 ;; A document has no root element: its top-level blocks are siblings.
-(define (tree->expr root) `(list ,@(convert-children (node-kids root) default-wrap)))
+(define (tree->expr root) `(list ,@(convert-children (node-kids root) (default-wraps))))
 
 ;;; ================= Entry points =================
 ;; whole document -> one expression, (list …): a list of sibling nodes
@@ -540,7 +582,7 @@
 on in FILE, so errors name the file and its lines."
   (parameterize ((current-uq-file file))
     (convert-children (node-kids (call-with-input-string str (lambda (p) (port->tree p first-line))))
-                      default-wrap)))
+                      (default-wraps))))
 
 ;; (markup "…")  expands at compile time into ordinary Scheme:
 ;;   (list (p "text " (em "x")) (ul (li …)) …)

@@ -126,6 +126,27 @@
        #t)
 (html "back to p" "<p>back to p</p>")
 
+;;; Tables: ,tr wraps cells; #:wrap (td th) lets a lone ,th through;
+;;; cells (#:wrap #f) keep their text inline
+(html ",table\n  ,tr\n    ,th Ingredient\n\n    ,th Amount\n  ,tr\n    Pasta (small\n    shells)\n\n    4 ,em[cups]"
+      "<table><tr><th>Ingredient</th><th>Amount</th></tr><tr><td>Pasta (small shells)</td><td>4 <em>cups</em></td></tr></table>")
+(html ",table\n  ,tr\n    Spices\n    ,ul\n      salt\n\n      pepper\n\n    ,td to taste"
+      "<table><tr><td>Spices<ul><li>salt</li><li>pepper</li></ul></td><td>to taste</td></tr></table>")
+(html ",table\n  ,tr\n    ,td\n      one\n\n      two" "<table><tr><td>one two</td></tr></table>")
+(html ",table\n  ,tr\n    ,td\n      ,em[a]\n\n      ,em[b]" "<table><tr><td><em>a</em> <em>b</em></td></tr></table>")
+(html ",table\n  ,tr\n    ,td\n      ,p one\n\n      ,p two" "<table><tr><td><p>one</p><p>two</p></td></tr></table>")
+;; loose text directly in a table is not wrapped (invalid HTML, by choice)
+(html ",table\n  Oops" "<table><p>Oops</p></table>")
+;; #:wrap values
+(for-each
+ (lambda (form)
+   (check (format #f "define-tag rejects ~s" (cdddr form))
+          (catch #t (lambda () (eval form (current-module)) #f) (lambda _ #t))
+          #t))
+ '((define-tag block:inline (x . b) #:wrap #f b)
+   (define-tag block (x . b) #:wrap "td" b)
+   (define-tag block (x . b) #:wrap () b)))
+
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
       "<p><a href=\"https://example.com\" title=\"Jar sizes for every recipe\">jars</a></p>")
