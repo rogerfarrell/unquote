@@ -39,6 +39,15 @@ guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe
 guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.uq   # also print the intermediate Scheme
 #+end_src
 
+Or compile with a per-project Guile script.  =examples/recipe/build.scm=
+turns =recipe.uq= into a complete HTML page (doctype, =<title>= taken from
+the first heading) and works from any directory:
+
+#+begin_src sh
+examples/recipe/build.scm                        # recipe.uq -> recipe.html
+examples/recipe/build.scm other.uq out.html
+#+end_src
+
 Run the tests:
 
 #+begin_src sh

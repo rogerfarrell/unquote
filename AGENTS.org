@@ -23,7 +23,7 @@ Prefer moving complexity into components or the parser.
 | =uq/tags.scm=      | generic components: structure, lists, inline markup        |
 | =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
-| =examples/recipe/= | =(recipe tags)= components and the =recipe.uq= document    |
+| =examples/recipe/= | =(recipe tags)=, =recipe.uq= and its =build.scm= script   |
 | =examples/demo.scm= | markup embedded in Scheme                                 |
 
 * Commands
@@ -32,6 +32,7 @@ Prefer moving complexity into components or the parser.
 guile -L . -L examples tests/run.scm             # must print "all tests passed"
 guile -L . -L examples unquote.scm --tags "(recipe tags)" examples/recipe/recipe.uq         # render
 guile -L . -L examples unquote.scm --expr --tags "(recipe tags)" examples/recipe/recipe.uq  # show intermediate Scheme on stderr
+examples/recipe/build.scm                        # compile recipe.uq -> recipe.html (git-ignored)
 guile -L . -L examples examples/demo.scm         # embedding demo
 #+end_src
 
