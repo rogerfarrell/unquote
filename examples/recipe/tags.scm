@@ -27,8 +27,7 @@
 ;; ,photo[file][alt] or ,photo[file :width 3in][alt]
 (define-tag block:inline (photo . alt) #:required-attributes attrs
   `(figure (@ (class "photo"))
-     (img (@ (src ,(or (attribute attrs 'src 0)
-                       (error ",photo needs a file: ,photo[file][alt text]")))
+     (img (@ (src ,(main-attribute attrs 'src 'photo))
              (alt ,(plain alt))
              ,@(attribute-list attrs '(src alt))))))
 (define-tag block:inline (yield . body) `(span (@ (class "yield")) "Yield: " ,@body))

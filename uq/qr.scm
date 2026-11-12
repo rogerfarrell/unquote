@@ -19,6 +19,7 @@
 ;;;
 ;;;   ,qr[DATA][label]
 ;;;   ,qr[DATA :ecc high][label]
+;;;   ,qr[:data DATA][label]
 ;;;
 ;;; DATA is any text: a URL, a "WIFI:…" or vCard string (quote it if it has
 ;;; spaces or brackets; \n for line breaks), digits.  The label is the
@@ -60,10 +61,7 @@
           (path (@ (d ,d) (fill "#000"))))))
 
 (define-tag inline (qr . label) #:required-attributes attrs
-  (let* ((data (match (attribute-values attrs)
-                 ((data) data)
-                 (() (error ",qr needs data: ,qr[data][label]"))
-                 (_ (error ",qr takes one data value; quote it if it has spaces: ,qr[\"a b\"]"))))
+  (let* ((data (main-attribute attrs 'data 'qr))
          (name (string-downcase (or (attribute attrs 'ecc) "low")))
          (ecc  (or (assoc-ref ecc-levels name)
                    (error (format #f ",qr: :ecc is low, medium, quartile or high, not ~a" name)))))

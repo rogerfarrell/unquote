@@ -126,6 +126,10 @@ row; it produces invalid HTML.
 - Some commands take an attribute bracket first, as in HTML, then an
   optional text bracket: =,link[address][text]=, =,image[file][alt text]=,
   =,photo[file][alt text]=.  A link without text shows its address.
+- The main value -- the address, the file, a QR code's data -- is the first
+  word, or can be named: =,link[:href https://…][text]=,
+  =,image[:src lid.svg][lid]=, =,qr[:data …]=.  Give it once, one way or
+  the other; a second plain word is an error (quote values with spaces).
 - Most commands that take attributes can leave the brackets out when no
   attributes are needed.  Some, such as =,link=, =,image= and =,photo=,
   require them; leaving them out (or empty) is an error with a line
@@ -173,7 +177,7 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
 (define-tag inline       (link . body) #:required-attributes attrs
-  (let ((href (attribute attrs 'href 0)))            ; :href, else the first plain word
+  (let ((href (main-attribute attrs 'href 'link)))   ; :href or the one plain word
     `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
 
@@ -182,12 +186,17 @@ may be left out, giving no attributes.  =#:required-attributes var= is the
 same, except that the attribute bracket must be there and not empty: the
 parser reports =line N: ,link needs attributes: …= otherwise.  It cannot
 know /which/ attribute is needed, so a component that needs a particular
-one (=photo= needs a file) still checks for it.  In both cases =var= is
+one checks for it, usually with =main-attribute=.  In both cases =var= is
 bound to the attribute bracket as a list: plain words as strings, in order,
 and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 =(@ …)=.  So =[jar.jpg :width 3in]= gives =("jar.jpg" (width "3in"))=, and
 =body= is the text.  Helpers from =(uq parse)=:
 
+- =(main-attribute attrs 'name 'command)= — a command's main value, given
+  as =:name= or as the one plain word.  Missing, given both ways, or given
+  as several plain words is an error naming the command, with its line:
+  =,link takes one href; quote it if it has spaces=.  =link=, =image=,
+  =photo= and =qr= use it.
 - =(attribute attrs 'name [n])= — the value of =:name=, else the /n/th
   plain word, else =#f=.
 - =(attribute-values attrs)= — the plain words.
@@ -253,7 +262,7 @@ Scan ,qr[https://example.com/recipes/cheeseburger-helper][the recipe online].
 ,qr["WIFI:T:WPA;S:Kitchen Net;P:secret;;" :ecc high][Kitchen Wi-Fi]
 #+end_example
 
-- The first word in the attribute bracket is the data: any text -- a URL,
+- The data is the first word in the attribute bracket, or =:data=: any text -- a URL,
   digits, a =WIFI:= or =mailto:= string, a vCard.  Quote it if it has
   spaces or brackets, and write line breaks as =\n= inside the quotes.
 - =:ecc= sets the error correction: =low= (the default), =medium=,
@@ -359,7 +368,7 @@ An escape that is not a complete expression is a parse error with its
 line number: =line 3: ,( is not a complete Scheme expression (unbalanced
 parentheses?)=.  An error /while evaluating/ an escape -- or raised by a
 component, such as =photo='s check for a file -- is reported with the
-line it came from too: =recipe.uq: line 7: ,photo needs a file: …=.  The
+line it came from too: =recipe.uq: line 7: ,photo needs its src: …=.  The
 parser wraps every component call and escape so that it can; =--expr=
 shows the expression without those wrappers.  Markup embedded in a Scheme
 file with =markup= or =#m<<END= reports that file and its lines:

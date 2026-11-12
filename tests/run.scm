@@ -184,7 +184,13 @@
   (let ((msg (error-text markup)))
     (check markup (and msg (string-prefix? prefix msg)) #t)))
 (fails-at "Some text.\n\nx ,(car '()) y" "line 3: ")
-(fails "x\n\n,photo[:width 3in][A jar]" "line 3: ,photo needs a file: ,photo[file][alt text]")
+(fails "x\n\n,photo[:width 3in][A jar]" "line 3: ,photo needs its src: as the first word or as :src")
+;; main-attribute: the main value as a word or as its key, once
+(html ",link[:href https://example.com][x]" "<p><a href=\"https://example.com\">x</a></p>")
+(html ",image[:src lid.svg][lid]" "<p><img src=\"lid.svg\" alt=\"lid\" /></p>")
+(fails "a ,link[https://a :href https://b][x]" "line 1: ,link: give the href once, as a word or as :href")
+(fails "a ,link[https://a extra][x]" "line 1: ,link takes one href; quote it if it has spaces")
+(fails "a ,image[:width 40][lid]" "line 1: ,image needs its src: as the first word or as :src")
 (fails-at ",tip\n  a\n  b ,em[x ,(car '())]" "line 3: ")
 (fails-at ",tip\n  a ,em[x\n  y ,(vector-ref (vector) 0)]" "line 3: ")
 (check "strip-line-wrappers shows the plain expression"
@@ -235,8 +241,8 @@
 ;;; ,(expr) with non-ASCII text inside
 (html "½ ,(string-append \"é\" \"½\") after" "<p>½ é½ after</p>")
 (check "parse attributes"
-       (eval (car (markup-string->exprs ",link[a b :x 1 c][t]")) (current-module))
-       '(p (a (@ (href "a") (x "1")) "t")))
+       (strip-line-wrappers (car (markup-string->exprs ",link[a b :x 1 c][t]")))
+       '(p (link '("a" "b" (x "1") "c") "t")))
 
 ;;; block:inline
 (html ",title Cheeseburger\n  Helper" "<h1>Cheeseburger Helper</h1>")
@@ -366,8 +372,11 @@
         (check "qr: quoted data with spaces"
                (and (string-contains (svg ",qr[\"WIFI:S:Kitchen Net;;\"][wifi]") "aria-label=\"wifi\"") #t) #t))
       (fails "x\n\n,qr[x :ecc best]" "line 3: ,qr: :ecc is low, medium, quartile or high, not best")
-      (fails ",qr[:ecc high]" "line 1: ,qr needs data: ,qr[data][label]")
-      (fails ",qr[WIFI:S:Kitchen Net;;]" "line 1: ,qr takes one data value; quote it if it has spaces: ,qr[\"a b\"]")
+      (fails ",qr[:ecc high]" "line 1: ,qr needs its data: as the first word or as :data")
+      (check "qr: :data works like the first word"
+             (render ",qr[:data https://example.com/r]") (render ",qr[https://example.com/r]"))
+      (fails ",qr[x :data y]" "line 1: ,qr: give the data once, as a word or as :data")
+      (fails ",qr[WIFI:S:Kitchen Net;;]" "line 1: ,qr takes one data; quote it if it has spaces")
       (fails ",qr" "line 1: ,qr needs attributes: ,qr[attributes][text]"))
     (format #t "skipping (uq qr) tests: Guile-QR-Code is not installed~%"))
 

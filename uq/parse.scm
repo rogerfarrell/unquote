@@ -17,7 +17,7 @@
 (define-module (uq parse)
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 textual-ports) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag attribute attribute-values attribute-list markup enable-markup-reader!
+  #:export (define-tag attribute attribute-values attribute-list main-attribute markup enable-markup-reader!
             read-markup-document markup-string->exprs
             at-line strip-line-wrappers uq-error-message))
 
@@ -288,6 +288,17 @@
       (and index
            (let ((bare (filter string? attrs)))
              (and (< index (length bare)) (list-ref bare index))))))
+
+(define (main-attribute attrs key command)
+  "A command's main value: given as :KEY, or as the one plain word in ATTRS.
+Missing, given both ways, or given as several plain words is an error
+naming COMMAND (raised while evaluating, so it carries the line)."
+  (match (list (attribute attrs key) (attribute-values attrs))
+    ((#f (word)) word)
+    (((? string? value) ()) value)
+    ((#f ()) (error (format #f ",~a needs its ~a: as the first word or as :~a" command key key)))
+    ((#f _) (error (format #f ",~a takes one ~a; quote it if it has spaces" command key)))
+    (_ (error (format #f ",~a: give the ~a once, as a word or as :~a" command key key)))))
 
 (define* (attribute-values attrs)
   "The bare (keyword-less) values in ATTRS, in order."

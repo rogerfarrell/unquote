@@ -87,8 +87,9 @@ component modules must be loaded before a document is parsed.
 - =#:attributes var=: optional; without brackets the command gets ='()=,
   inline or block.  =#:required-attributes var=: the parser rejects a
   missing or empty bracket with a line number.  It cannot check for a
-  particular attribute, so components still give a clear error when one
-  they need is missing, as =photo= does.
+  particular attribute, so components check the ones they need.  For a
+  command's main value use =main-attribute= (=:key= or the one plain word,
+  with uniform errors), as =link=, =image=, =photo= and =qr= do.
 - Attribute commands read =[attributes]= first and an
   optional =[text]= second.  The attribute bracket parses to a list of
   plain-word strings and =(name "value")= pairs; components interpret it.
