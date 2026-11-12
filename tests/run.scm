@@ -71,6 +71,25 @@
 (html ",photo[jar.jpg :width 3in :alt ignored][A jar]"
       "<figure class=\"photo\"><img src=\"jar.jpg\" alt=\"A jar\" width=\"3in\" /></figure>")
 (fails "a ,image[lid.svg :width][lid]" "line 1: ,image: :width needs a value")
+
+;;; Quoted attribute values
+(html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
+      "<p><a href=\"https://example.com\" title=\"Jar sizes for every recipe\">jars</a></p>")
+(html ",photo[\"jar photo.jpg\" :width 3in][A jar]"
+      "<figure class=\"photo\"><img src=\"jar photo.jpg\" alt=\"A jar\" width=\"3in\" /></figure>")
+(html ",link[:title \"say \\\"hi\\\" [1]\" https://example.com][x]"
+      "<p><a href=\"https://example.com\" title=\"say &quot;hi&quot; [1]\">x</a></p>")
+(html ",link[\":not-a-key\" :title t][x]" "<p><a href=\":not-a-key\" title=\"t\">x</a></p>")
+(html "see ,link[\"https://example.com/a/very/\n  long/path\" :title \"wrapped\n  title\"][it]"
+      "<p>see <a href=\"https://example.com/a/very/long/path\" title=\"wrapped title\">it</a></p>")
+;; quotes are only special in attribute brackets (sxml->xml escapes them)
+(html "a \"quoted\" word ,em[and \"this\"]" "<p>a &quot;quoted&quot; word <em>and &quot;this&quot;</em></p>")
+(fails "a ,link[:title \"never closed][x]" "line 1: ,link: a \" is never closed")
+(fails ",tip\n  First line\n  see ,link[:title \"never\n  closed][x]" "line 3: ,link: a \" is never closed")
+(fails "a ,link[:title :href x][y]" "line 1: ,link: :title needs a value")
+
+;;; ,(expr) with non-ASCII text inside
+(html "½ ,(string-append \"é\" \"½\") after" "<p>½ é½ after</p>")
 (check "parse attributes"
        (eval (car (markup-string->exprs ",link[a b :x 1 c][t]")) (current-module))
        '(p (a (@ (href "a") (x "1")) "t")))

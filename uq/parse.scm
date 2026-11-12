@@ -15,9 +15,9 @@
 ;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 (define-module (uq parse)
-  #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 regex)
+  #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 textual-ports) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag attribute attribute-values attribute-list markup enable-markup-reader!
+  #:export (define-tag attribute attribute-address attribute-values attribute-list markup enable-markup-reader!
             read-markup-document markup-string->exprs))
 
 ;;; ================= Component registry =================
@@ -112,42 +112,101 @@
            (set-node-kids! parent (append (node-kids parent) (list node)))
            (loop rest (1+ n) (cdr is) (if (blank? node) stack (cons node stack)))))))))
 
+;;; ================= Reading Scheme from a string =================
+;; Read one datum from S starting at index I.  Returns (values datum end),
+;; END being the character index just after it.  (ftell on a string port
+;; counts bytes, so the end is found from the characters left unread.)
+(define (read-datum-at s i)
+  (let* ((p (open-input-string (substring s i)))
+         (datum (read p))
+         (left (string-length (get-string-all p))))
+    (values datum (- (string-length s) left))))
+
 ;;; ================= Attributes =================
 ;; The first bracket of an attributes command, e.g. [cheese.jpg :width 3in],
 ;; is split on whitespace.  ":key value" becomes (key "value"), ready to drop
 ;; into an SXML (@ …) list; any other word stays a string, in order, for the
 ;; component to interpret.  So [cheese.jpg :width 3in] -> ("cheese.jpg" (width "3in")).
-(define (parse-attributes str name line)
-  (let loop ((words (remove string-null? (string-split (nl->sp str) #\space))) (acc '()))
-    (match words
-      (() (reverse acc))
-      (((? (lambda (w) (and (> (string-length w) 1) (char=? (string-ref w 0) #\:))) key) . rest)
-       (match rest
-         ((value . rest)
-          (loop rest (cons (list (string->symbol (substring key 1)) value) acc)))
-         (() (oops line ",~a: ~a needs a value" name key))))
-      ((word . rest) (loop rest (cons word acc))))))
+;;
+;; A word may be a "double-quoted" Scheme string, read with Guile's reader
+;; (\" and \\ escapes), to hold spaces: [:title "Jar sizes"].  A quoted
+;; string is never a :key.  It may wrap across lines; the parsed value keeps
+;; a newline where it wrapped (indentation is already gone), and the helpers
+;; below decide: text gets a space there, an address gets nothing.
 
-;; Helpers for components.
-(define* (attribute attrs key #:optional index)
-  "The value of :KEY in ATTRS; failing that, the INDEXth bare value; else #f."
+;; STR -> list of tokens: plain words as strings, quoted strings as (q . str)
+(define (attribute-tokens str name line)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (acc '()))
+      (let ((i (or (string-skip str char-whitespace? i) len)))
+        (cond
+         ((>= i len) (reverse acc))
+         ((char=? (string-ref str i) #\")
+          (call-with-values
+              (lambda ()
+                (catch #t
+                  (lambda () (read-datum-at str i))
+                  (lambda _ (oops (line-at str i line) ",~a: a \" is never closed" name))))
+            (lambda (value end)
+              (loop end (cons (cons 'q value) acc)))))
+         (else
+          (let ((end (or (string-index str char-whitespace? i) len)))
+            (loop end (cons (substring str i end) acc)))))))))
+
+(define (parse-attributes str name line)
+  (define (key? t) (and (string? t) (> (string-length t) 1) (char=? (string-ref t 0) #\:)))
+  (define (value t) (if (pair? t) (cdr t) t))
+  (let loop ((tokens (attribute-tokens str name line)) (acc '()))
+    (match tokens
+      (() (reverse acc))
+      (((? key? key) . rest)
+       (match rest
+         ((v . rest) (if (key? v)
+                         (oops line ",~a: ~a needs a value" name key)
+                         (loop rest (cons (list (string->symbol (substring key 1)) (value v)) acc))))
+         (() (oops line ",~a: ~a needs a value" name key))))
+      ((t . rest) (loop rest (cons (value t) acc))))))
+
+;; Helpers for components.  Values come back as text (a wrap becomes a
+;; space), except from attribute-address (a wrap is removed, so a long URL
+;; can be split across lines).
+(define (raw-attribute attrs key index)
   (or (any (lambda (a) (and (pair? a) (eq? (car a) key) (cadr a))) attrs)
       (and index
            (let ((bare (filter string? attrs)))
              (and (< index (length bare)) (list-ref bare index))))))
 
+(define* (attribute attrs key #:optional index)
+  "The value of :KEY in ATTRS; failing that, the INDEXth bare value; else #f."
+  (and=> (raw-attribute attrs key index) nl->sp))
+
+(define* (attribute-address attrs key #:optional index)
+  "Like attribute, but a value wrapped across lines is joined without a space."
+  (and=> (raw-attribute attrs key index) (lambda (v) (string-delete #\newline v))))
+
 (define* (attribute-values attrs)
   "The bare (keyword-less) values in ATTRS, in order."
-  (filter string? attrs))
+  (map nl->sp (filter string? attrs)))
 
 (define* (attribute-list attrs #:optional (exclude '()))
   "The :key value pairs in ATTRS as SXML attributes, minus the keys in EXCLUDE."
-  (filter (lambda (a) (and (pair? a) (not (memq (car a) exclude)))) attrs))
+  (filter-map (lambda (a) (and (pair? a) (not (memq (car a) exclude))
+                               (list (car a) (nl->sp (cadr a)))))
+              attrs))
 
 ;;; ================= Brackets =================
-(define (matching-bracket s open)      ; index of "]" matching "[" at OPEN, or #f
+;; Index of the "]" matching the "[" at OPEN, or #f.  With QUOTES?, a
+;; "double-quoted" string is skipped whole, so [:title "see [1]"] works,
+;; and an unclosed quote gives (quote INDEX-OF-THE-QUOTE).
+(define* (matching-bracket s open #:optional quotes?)
   (let loop ((j (1+ open)) (depth 0))
     (cond ((>= j (string-length s)) #f)
+          ((and quotes? (char=? (string-ref s j) #\"))
+           (let skip ((k (1+ j)))
+             (cond ((>= k (string-length s)) (list 'quote j))
+                   ((char=? (string-ref s k) #\\) (skip (+ k 2)))
+                   ((char=? (string-ref s k) #\") (loop (1+ k) depth))
+                   (else (skip (1+ k))))))
           ((char=? (string-ref s j) #\[) (loop (1+ j) (1+ depth)))
           ((char=? (string-ref s j) #\]) (if (zero? depth) j (loop (1+ j) (1- depth))))
           (else (loop (1+ j) depth)))))
@@ -157,8 +216,12 @@
 ;; <a href=…>text</a>), then an optional text bracket.
 ;; Returns (values text attributes-or-#f index-after).
 (define (read-brackets s open name line)
-  (let ((close (matching-bracket s open)))
-    (unless close (oops line ",~a[ is never closed with ]" name))
+  (let ((close (matching-bracket s open (attributes? name))))
+    (match close
+      (('quote q) (oops (+ line (string-count (substring s open q) #\newline))   ; LINE is the bracket's
+                        ",~a: a \" is never closed" name))
+      (#f (oops line ",~a[ is never closed with ]" name))
+      (_ #t))
     (let ((first (substring s (1+ open) close))
           (next  (1+ close)))
       (cond
@@ -191,10 +254,9 @@
            (let ((n (string-ref s (1+ i)))) (or (char-alphabetic? n) (char=? n #\())))
       (if (char=? (string-ref s (1+ i)) #\()
           ;; ,(expr) — read one Scheme datum and splice it in
-          (let* ((p (open-input-string (substring s (1+ i))))
-                 (datum (read p))
-                 (end (+ i 1 (ftell p))))
-            (loop end end (cons datum (text-upto i))))
+          (call-with-values (lambda () (read-datum-at s (1+ i)))
+            (lambda (datum end)
+              (loop end end (cons datum (text-upto i)))))
           (let* ((ne (name-end s (1+ i)))
                  (name (string->symbol (substring s (1+ i) ne)))
                  (here (line-at s i line))

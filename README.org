@@ -109,8 +109,18 @@ guile -L . -L examples tests/run.scm
   passed to the command, which decides what it means (for =,link=, the
   first one is the address).
 - =:name value= sets an attribute by name: =,link[:href https://… :title
-  Sizes][jars]=, =,photo[jar.jpg :width 3in][A jar]=.  The value is one
-  word.
+  Sizes][jars]=, =,photo[jar.jpg :width 3in][A jar]=.
+- A value with spaces goes in double quotes, as in Scheme or SXML:
+  =:title "Jar sizes for every recipe"=, =,photo["jar photo.jpg"][A jar]=.
+  =\"= and =\\= are escapes.  Quotes are only special in attribute
+  brackets; in prose they are plain text.
+- A quoted value may wrap onto the next line.  In text, such as a title,
+  the wrap becomes a space; in an address it is removed, so a long URL can
+  be split anywhere:
+  #+begin_example
+  See ,link["https://example.com/a/very/
+    long/path"][the guide].
+  #+end_example
 
 ** Attributes are rarely needed
 Editors normally write none: classes, labels and sizes live in the
@@ -141,7 +151,7 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
 (define-tag inline       (link . body) #:attributes attrs
-  (let ((href (attribute attrs 'href 0)))            ; :href, else the first plain word
+  (let ((href (attribute-address attrs 'href 0)))    ; :href, else the first plain word
     `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
 
@@ -153,9 +163,14 @@ and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 
 - =(attribute attrs 'name [n])= — the value of =:name=, else the /n/th
   plain word, else =#f=.
+- =(attribute-address attrs 'name [n])= — the same, for URLs and file
+  names: where a quoted value wrapped, nothing is inserted.
 - =(attribute-values attrs)= — the plain words.
 - =(attribute-list attrs ['(excluded …)])= — the =:name value= pairs as SXML
   attributes.
+
+Quoted values keep a newline where the editor wrapped them; the helpers
+turn it into a space, except =attribute-address=, which removes it.
 
 =#:wrap= names the tag each blank-line group is wrapped in.  The wrapper's
 own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds

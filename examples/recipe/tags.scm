@@ -27,7 +27,7 @@
 ;; ,photo[file][alt] or ,photo[file :width 3in][alt]
 (define-tag block:inline (photo . alt) #:attributes attrs
   `(figure (@ (class "photo"))
-     (img (@ (src ,(attribute attrs 'src 0)) (alt ,(plain alt))
+     (img (@ (src ,(attribute-address attrs 'src 0)) (alt ,(plain alt))
              ,@(attribute-list attrs '(src alt))))))
 (define-tag block:inline (yield . body) `(span (@ (class "yield")) "Yield: " ,@body))
 (define-tag block:inline (prep . body)  `(span (@ (class "prep")) "Prep time: " ,@body))
