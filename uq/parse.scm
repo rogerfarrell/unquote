@@ -21,7 +21,7 @@
             read-markup-document markup-string->exprs))
 
 ;;; ================= Component registry =================
-;; name -> (kind attributes? wrap)
+;; name -> (kind attributes wrap), attributes being #f, optional or required
 ;; Kinds are  placement:content.
 ;;   block:block   (alias block)   starts a line; holds blank-line-separated groups,
 ;;                                 each wrapped in the tag's #:wrap (default p)
@@ -41,42 +41,63 @@
 (define registry (make-hash-table))
 (define (entry name)    (hash-ref registry name))
 (define (kind-of name)  (and=> (entry name) car))
-(define (attributes? name) (and=> (entry name) cadr))
+(define (attributes? name) (and=> (entry name) cadr))   ; optional or required
+(define (attributes-required? name) (eq? (attributes? name) 'required))
 (define (wrap-of name)  (or (and=> (entry name) caddr) 'p))
 
-(define (register! name kind attributes? wrap)
+(define (register! name kind attributes wrap)
   (let ((k (canonical-kind kind)))
     (unless (memq k (append block-kinds inline-kinds))
       (error "define-tag: unknown kind" kind))
     (when (and wrap (not (eq? k 'block:block)))
       (error "define-tag: only block:block tags take #:wrap" name))
-    (hash-set! registry name (list k attributes? wrap))))
+    (hash-set! registry name (list k attributes wrap))))
 
-;; (define-tag kind (name . body) [#:wrap tag] [#:attributes var] expr …)
+;; (define-tag kind (name . body) [option …] expr …)
 ;;
 ;; Defines the component procedure, registers it with the parser, and
-;; exports it from the module it appears in.  The keywords may be combined,
-;; in either order.
-;;   #:wrap tag        block:block only: wrap each blank-line group in TAG
-;;   #:attributes var  the command takes [attributes][text].  VAR is bound
-;;                     to the attribute list (see parse-attributes) and
-;;                     BODY is the text -- or, for a block, its contents.
-;;                     For example:
-;;                       (define-tag inline (link . body) #:attributes attrs
-;;                         (let ((href (attribute attrs 'href 0)))
-;;                           `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
+;; exports it from the module it appears in.  Options, in any order:
+;;   #:wrap tag                 block:block only: wrap each blank-line group in TAG
+;;   #:attributes var           the command may take [attributes][text]; the
+;;                              brackets can be left out, giving no attributes
+;;   #:required-attributes var  the same, but the attribute bracket must be
+;;                              there and not empty; the parser says so,
+;;                              with a line number
+;; With either attributes option, VAR is bound to the attribute list (see
+;; parse-attributes) and BODY is the text -- or, for a block, its contents.
+;; For example:
+;;   (define-tag inline (link . body) #:required-attributes attrs
+;;     (let ((href (attribute attrs 'href 0)))
+;;       `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
   (syntax-rules ()
-    ((_ kind (name . body) #:wrap w #:attributes a expr ...)
-     (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t 'w)))
-    ((_ kind (name . body) #:attributes a #:wrap w expr ...)
-     (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t 'w)))
-    ((_ kind (name . body) #:wrap w expr ...)
-     (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f 'w)))
-    ((_ kind (name . body) #:attributes a expr ...)
-     (begin (define (name a . body) expr ...) (export name) (register! 'name 'kind #t #f)))
-    ((_ kind (name . body) expr ...)
-     (begin (define (name . body) expr ...) (export name) (register! 'name 'kind #f #f)))))
+    ((_ kind (name . body) . rest)
+     (define-tag/options kind name body #f #f #f rest))))
+
+;; Collects the options, then defines.  W: wrap tag or #f; A: the attribute
+;; variable or #f; M: optional, required or #f.
+(define-syntax define-tag/options
+  (syntax-rules ()
+    ((_ k n b w #f m (#:attributes a . rest))
+     (define-tag/options k n b w a optional rest))
+    ((_ k n b w #f m (#:required-attributes a . rest))
+     (define-tag/options k n b w a required rest))
+    ((_ k n b w a m (#:attributes . rest))
+     (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
+    ((_ k n b w a m (#:required-attributes . rest))
+     (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
+    ((_ k n b #f a m (#:wrap w . rest))
+     (define-tag/options k n b w a m rest))
+    ((_ k n b w a m (#:wrap . rest))
+     (syntax-error "define-tag: #:wrap given twice" n))
+    ((_ k n b #f #f #f (expr ...))
+     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f #f)))
+    ((_ k n b w #f #f (expr ...))
+     (begin (define (n . b) expr ...) (export n) (register! 'n 'k #f 'w)))
+    ((_ k n b #f a m (expr ...))
+     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm #f)))
+    ((_ k n b w a m (expr ...))
+     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm 'w)))))
 
 (define (oops line fmt . args)
   (error (string-append "line " (number->string line) ": " (apply format #f fmt args))))
@@ -223,8 +244,16 @@
        ((and (< next (string-length s)) (char=? (string-ref s next) #\[))
         (let ((close2 (matching-bracket s next)))
           (unless close2 (oops line "the text after ,~a[...] is never closed with ]" name))
-          (values (substring s (1+ next) close2) (parse-attributes first name line) (1+ close2))))
-       (else (values "" (parse-attributes first name line) next))))))   ; text is optional
+          (values (substring s (1+ next) close2) (checked-attributes first name line) (1+ close2))))
+       (else (values "" (checked-attributes first name line) next))))))   ; text is optional
+
+(define (missing-attributes name line)
+  (oops line ",~a needs attributes: ,~a[attributes][text]" name name))
+
+(define (checked-attributes str name line)
+  (let ((attrs (parse-attributes str name line)))
+    (when (and (null? attrs) (attributes-required? name)) (missing-attributes name line))
+    attrs))
 
 ;;; ================= Inline text -> parts =================
 ;; S is a whole paragraph or item: its lines joined with "\n".  LINE is the
@@ -262,12 +291,13 @@
               (call-with-values (lambda () (read-brackets s ne name here))
                 (lambda (inner addr after)
                   (loop after after (cons (call name addr (parse-inline inner here)) (text-upto i))))))
-             ((attributes? name) (oops here ",~a needs brackets: ,~a[attributes][text]" name name))
+             ((attributes-required? name) (missing-attributes name here))
              (else                       ; declared extent: next word / rest of line
               (let* ((after (if (and (< ne (string-length s)) (char=? (string-ref s ne) #\space)) (1+ ne) ne))
                      (stop (if (eq? kind 'inline:word) char-whitespace? (lambda (c) (char=? c #\newline))))
                      (we (or (string-index s stop after) (string-length s))))
-                (loop we we (cons (call name #f (parse-inline (substring s after we) here))
+                (loop we we (cons (call name (and (attributes? name) '())   ; optional: none given
+                                        (parse-inline (substring s after we) here))
                                   (text-upto i)))))))))
      (else (loop (1+ i) start acc)))))
 
@@ -289,8 +319,9 @@
                     (unless (string-null? (string-trim (substring s after)))
                       (oops (node-line n) "unexpected text after ,~a[...]" name))
                     (list name addr inner))))
-               ;; no brackets: an attribute block gets no attributes, and the
-               ;; rest of the line is the first line of its body, as usual
+               ;; no brackets: optional attributes are none, and the rest of
+               ;; the line is the first line of the body, as usual
+               ((attributes-required? name) (missing-attributes name (node-line n)))
                ((attributes? name) (list name '() (string-trim (substring s ne))))
                (else (list name #f (string-trim (substring s ne))))))
              ((#f) (oops (node-line n) "unknown command ,~a" name))

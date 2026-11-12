@@ -67,11 +67,13 @@ component modules must be loaded before a document is parsed.
   Aliases are resolved in =register!=; code after registration only sees
   canonical names.
 - Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
-  =#:wrap= and =#:attributes= may be combined.
-- Attribute blocks may omit their brackets (attributes ='()=); inline
-  attribute commands may not.  Components should give a clear error when
-  a required attribute is missing, as =photo= does.
-- Attribute commands (=#:attributes var=) read =[attributes]= first and an
+  =#:wrap= combines with either attributes option, in any order.
+- =#:attributes var=: optional; without brackets the command gets ='()=,
+  inline or block.  =#:required-attributes var=: the parser rejects a
+  missing or empty bracket with a line number.  It cannot check for a
+  particular attribute, so components still give a clear error when one
+  they need is missing, as =photo= does.
+- Attribute commands read =[attributes]= first and an
   optional =[text]= second.  The attribute bracket parses to a list of
   plain-word strings and =(name "value")= pairs; components interpret it.
   Values may be "double-quoted" Scheme strings (read with =read=, never a

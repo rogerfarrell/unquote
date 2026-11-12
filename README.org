@@ -105,8 +105,10 @@ guile -L . -L examples tests/run.scm
 - Some commands take an attribute bracket first, as in HTML, then an
   optional text bracket: =,link[address][text]=, =,image[file][alt text]=,
   =,photo[file][alt text]=.  A link without text shows its address.
-- A block command that takes attributes may leave the brackets out when it
-  needs none; inline ones (=,link=, =,image=) always need them.
+- Most commands that take attributes can leave the brackets out when no
+  attributes are needed.  Some, such as =,link=, =,image= and =,photo=,
+  require them; leaving them out (or empty) is an error with a line
+  number.
 - Words in the attribute bracket are separated by spaces.  A plain word is
   passed to the command, which decides what it means (for =,link=, the
   first one is the address).
@@ -148,12 +150,17 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (ul . body) #:wrap li `(ul ,@body))
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
-(define-tag inline       (link . body) #:attributes attrs
+(define-tag inline       (link . body) #:required-attributes attrs
   (let ((href (attribute attrs 'href 0)))            ; :href, else the first plain word
     `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
 
-=#:attributes var= makes a command take =[attributes][text]=.  =var= is
+=#:attributes var= lets a command take =[attributes][text]=; the brackets
+may be left out, giving no attributes.  =#:required-attributes var= is the
+same, except that the attribute bracket must be there and not empty: the
+parser reports =line N: ,link needs attributes: …= otherwise.  It cannot
+know /which/ attribute is needed, so a component that needs a particular
+one (=photo= needs a file) still checks for it.  In both cases =var= is
 bound to the attribute bracket as a list: plain words as strings, in order,
 and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 =(@ …)=.  So =[jar.jpg :width 3in]= gives =("jar.jpg" (width "3in"))=, and
@@ -184,9 +191,8 @@ The two keywords combine, in either order.  A list that takes attributes:
   Seal it
 #+end_example
 
-An attribute block may leave out the brackets: =,steps= alone has no
+Since =#:attributes= is optional, =,steps= alone works too: no
 attributes, and text after it on the line is the first line of its body.
-Inline attribute commands (=,link=, =,image=) always need theirs.
 
 * Build scripts
 

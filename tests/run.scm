@@ -60,7 +60,7 @@
 (html ",image[lid.svg][lid icon]" "<p><img src=\"lid.svg\" alt=\"lid icon\" /></p>")
 (html "footnote ,em[one][1]" "<p>footnote <em>one</em>[1]</p>")
 (html ",photo[jar.jpg][A jar]" "<figure class=\"photo\"><img src=\"jar.jpg\" alt=\"A jar\" /></figure>")
-(fails "see ,link here" "line 1: ,link needs brackets: ,link[attributes][text]")
+(fails "see ,link here" "line 1: ,link needs attributes: ,link[attributes][text]")
 
 ;;; Attributes: bare values in order, :key value pairs as attributes
 (html ",link[:href https://example.com :title Sizes][jars]"
@@ -86,7 +86,26 @@
 ;; attribute blocks may omit the brackets: no attributes
 (html ",steps\n  Fill the jar\n\n  Seal it" "<ol class=\"steps\"><li>Fill the jar</li><li>Seal it</li></ol>")
 (html ",note Keep it dry.\n  Really." "<aside><p>Keep it dry. Really.</p></aside>")
-;; (inline attribute commands still need them: see ",link here" above)
+;; #:attributes is optional, inline too: no brackets means no attributes
+(define-tag inline (hl . body) #:attributes attrs `(mark (@ ,@(attribute-list attrs)) ,@body))
+(html "a ,hl bright idea\nnext" "<p>a <mark>bright idea</mark> next</p>")
+(html "a ,hl[:class x][bright] idea" "<p>a <mark class=\"x\">bright</mark> idea</p>")
+;; #:required-attributes: the parser insists, with a line number
+(fails "a ,link[][text]" "line 1: ,link needs attributes: ,link[attributes][text]")
+(fails "x\n\n,photo A jar" "line 3: ,photo needs attributes: ,photo[attributes][text]")
+(fails ",photo[][A jar]" "line 1: ,photo needs attributes: ,photo[attributes][text]")
+(define-tag block (checklist . body) #:required-attributes attrs #:wrap li
+  `(ul (@ ,@(attribute-list attrs)) ,@body))
+(html ",checklist[:id pack]\n  Jar\n\n  Lid" "<ul id=\"pack\"><li>Jar</li><li>Lid</li></ul>")
+(fails ",checklist\n  Jar" "line 1: ,checklist needs attributes: ,checklist[attributes][text]")
+;; options that conflict are syntax errors
+(for-each
+ (lambda (form)
+   (check (format #f "define-tag rejects ~s" (cddr form))
+          (catch #t (lambda () (eval form (current-module)) #f) (lambda _ #t))
+          #t))
+ '((define-tag block (x . b) #:attributes a #:required-attributes c b)
+   (define-tag block (x . b) #:wrap li #:wrap p b)))
 
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
