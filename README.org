@@ -105,6 +105,8 @@ guile -L . -L examples tests/run.scm
 - Some commands take an attribute bracket first, as in HTML, then an
   optional text bracket: =,link[address][text]=, =,image[file][alt text]=,
   =,photo[file][alt text]=.  A link without text shows its address.
+- A block command that takes attributes may leave the brackets out when it
+  needs none; inline ones (=,link=, =,image=) always need them.
 - Words in the attribute bracket are separated by spaces.  A plain word is
   passed to the command, which decides what it means (for =,link=, the
   first one is the address).
@@ -182,8 +184,9 @@ The two keywords combine, in either order.  A list that takes attributes:
   Seal it
 #+end_example
 
-Like every attribute command, such a block needs its bracket, even if
-empty: =,steps[]=.
+An attribute block may leave out the brackets: =,steps= alone has no
+attributes, and text after it on the line is the first line of its body.
+Inline attribute commands (=,link=, =,image=) always need theirs.
 
 * Build scripts
 

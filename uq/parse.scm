@@ -289,8 +289,9 @@
                     (unless (string-null? (string-trim (substring s after)))
                       (oops (node-line n) "unexpected text after ,~a[...]" name))
                     (list name addr inner))))
-               ((attributes? name)
-                (oops (node-line n) ",~a needs brackets: ,~a[attributes][text]" name name))
+               ;; no brackets: an attribute block gets no attributes, and the
+               ;; rest of the line is the first line of its body, as usual
+               ((attributes? name) (list name '() (string-trim (substring s ne))))
                (else (list name #f (string-trim (substring s ne))))))
              ((#f) (oops (node-line n) "unknown command ,~a" name))
              (else #f))))))                     ; inline command at line start: text

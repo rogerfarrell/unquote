@@ -83,7 +83,10 @@
       "<ol class=\"steps\"><li>Fill the jar</li><li>Seal it</li></ol>")
 (html ",note[:id keep][Keep it dry.]\n  Really.\n\n  Second."
       "<aside id=\"keep\"><p>Keep it dry. Really.</p><p>Second.</p></aside>")
-(fails ",steps\n  x" "line 1: ,steps needs brackets: ,steps[attributes][text]")
+;; attribute blocks may omit the brackets: no attributes
+(html ",steps\n  Fill the jar\n\n  Seal it" "<ol class=\"steps\"><li>Fill the jar</li><li>Seal it</li></ol>")
+(html ",note Keep it dry.\n  Really." "<aside><p>Keep it dry. Really.</p></aside>")
+;; (inline attribute commands still need them: see ",link here" above)
 
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"

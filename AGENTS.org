@@ -68,6 +68,9 @@ component modules must be loaded before a document is parsed.
   canonical names.
 - Only =block:block= tags take =#:wrap=, and the wrapper must be a block tag.
   =#:wrap= and =#:attributes= may be combined.
+- Attribute blocks may omit their brackets (attributes ='()=); inline
+  attribute commands may not.  Components should give a clear error when
+  a required attribute is missing, as =photo= does.
 - Attribute commands (=#:attributes var=) read =[attributes]= first and an
   optional =[text]= second.  The attribute bracket parses to a list of
   plain-word strings and =(name "value")= pairs; components interpret it.
