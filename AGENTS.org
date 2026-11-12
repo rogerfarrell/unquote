@@ -88,6 +88,12 @@ component modules must be loaded before a document is parsed.
   :key).  A quoted value must close on its own line; the bracket matcher
   skips quoted strings in attribute brackets only, and stops at a line
   break inside one.
+- =,(expr)= escapes are skipped whole by the bracket matcher, so brackets
+  in their strings do not count; an unreadable one is a parse error with
+  its line.  Escapes are not evaluated in attribute brackets.
+- =uq-error-message= must never raise: errors come in several shapes
+  (=syntax-error=, =misc-error=, …) and a format mismatch falls back to
+  the raw key and arguments.
 - Find the end of a datum read from a string with =read-datum-at=, not
   =ftell=: string ports count bytes, so =ftell= is wrong after non-ASCII.
 - Parse errors are raised with =oops= and start with ="line N: "=.  Report

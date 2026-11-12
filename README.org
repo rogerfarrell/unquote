@@ -252,6 +252,63 @@ Lower-level pieces are exported too: =uq-file->expr=, =uq-file->sxml=,
 (=sxml->xml= with an optional =#:indent=).
 =examples/recipe/build.scm= is a complete script.
 
+* Scheme expressions in a document
+
+A comma followed by an open parenthesis is an escape into Guile Scheme:
+=,(expr)= evaluates one expression and puts its value where it stands.
+It is for the template maintainer, not for editors.
+
+#+begin_example
+Makes ,(number->string (* 4 3)) jars.  Updated ,(strftime "%B %Y" (localtime (current-time))).
+#+end_example
+
+** Where it can go
+Anywhere an inline command can: at the start of a word in a paragraph or
+list item, on a block's own line, or inside a text bracket
+(=,em[a ,(string-upcase "b") c]=).  The expression may span lines, and
+brackets or quotes inside it are ordinary Scheme -- =,em[,(string-append
+"]" "[")]= works.  Attribute brackets are literal: an escape there is not
+evaluated.
+
+** What the value may be
+| value                               | written as                                    |
+|-------------------------------------+-----------------------------------------------|
+| a string                            | text, escaped                                 |
+| a number                            | its printed form                              |
+| an SXML element, or a list of nodes | markup: =,(em "x")=, =,(quote (b "x"))=        |
+| =#f=                                | nothing                                       |
+| anything else                       | its printed form, e.g. =#<unspecified>=: avoid |
+
+Calling a component directly, as in =,(em "x")=, bypasses the parser's
+rules: =,(ul …)= in the middle of a paragraph produces a =<ul>= inside a
+=<p>=, which is invalid HTML.  Use markup for structure.
+
+** What it can see
+The document is parsed first and evaluated afterwards, as one expression,
+in a module that uses Guile's core bindings, =(uq tags)= and every
+=#:tags= module.  So an escape can call any procedure those export,
+components included.  Inside the =markup= macro (below) it also sees the
+variables in scope where =markup= is written.
+
+** Expressions only
+An escape is an expression inside the document, not a top-level form, so
+it cannot hold definitions: =,(define jars 12)= is reported as
+=definition in expression context=.  Put helpers and data in a tags
+module or the build script and call them from the document.  Do not rely
+on the order in which escapes run.
+
+** Errors
+An escape that is not a complete expression is a parse error with its
+line number: =line 3: ,( is not a complete Scheme expression (unbalanced
+parentheses?)=.  An error /while evaluating/ happens after parsing, so it
+is reported with the file name but no line: =recipe.uq: Wrong type
+(expecting pair): ()=.
+
+** Trust
+An escape can run any Scheme code with the permissions of whoever builds
+the site.  Only build documents you trust, or evaluate them in a module
+that exports nothing beyond the components.
+
 * Using markup inside Scheme
 
 #+begin_src scheme
@@ -268,8 +325,7 @@ compilation and =,(expr)= sees the variables in scope.  With
 =(enable-markup-reader!)= the same text can be written as a =#m<<END= …
 =END= heredoc without quotes.  See =examples/demo.scm=.
 
-=,(expr)= evaluates arbitrary Scheme.  Documents are evaluated with =eval=,
-so only render documents you trust, or evaluate them in a restricted module.
+See [[*Scheme expressions in a document][Scheme expressions in a document]] for what =,(expr)= can do.
 
 * AI disclosure
 

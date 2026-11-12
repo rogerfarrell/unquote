@@ -181,9 +181,15 @@ written as a fragment.  INDENT is passed to write-sxml."
 
 (define (uq-error-message key args)
   "A one-line message for an exception raised while compiling."
-  (match args
-    ((_ (? string? fmt) (? list? fargs) . _) (apply format #f fmt fargs))
-    (_ (format #f "~a ~s" key args))))
+  (define (fallback) (format #f "~a: ~s" key args))
+  (match (cons key args)
+    ;; syntax errors: (who message source-properties form subform)
+    (('syntax-error _ (? string? msg) _ form . _)
+     (format #f "~a ~s" (string-trim-right msg #\,) form))
+    ;; error, misc-error and friends: (who format-string format-args . _)
+    ((_ _ (? string? fmt) (? list? fargs) . _)
+     (catch #t (lambda () (apply format #f fmt fargs)) (lambda _ (fallback))))
+    (_ (fallback))))
 
 (define (default-output in)
   (string-append (if (string-suffix? ".uq" in) (string-drop-right in 3) in) ".html"))

@@ -220,10 +220,12 @@
   (filter (lambda (a) (and (pair? a) (not (memq (car a) exclude)))) attrs))
 
 ;;; ================= Brackets =================
-;; Index of the "]" matching the "[" at OPEN, or #f.  With QUOTES?, a
+;; Index of the "]" matching the "[" at OPEN, or #f.  A ,(expr) escape
+;; inside is skipped whole, so brackets in its strings do not count.  With QUOTES?, a
 ;; "double-quoted" string is skipped whole, so [:title "see [1]"] works.
 ;; A quote must close on its own line; if it does not, the result is
-;; (quote INDEX-OF-THE-QUOTE).
+;; (quote INDEX-OF-THE-QUOTE).  An unreadable ,(expr) gives
+;; (escape INDEX-OF-THE-COMMA).
 (define* (matching-bracket s open #:optional quotes?)
   (let loop ((j (1+ open)) (depth 0))
     (cond ((>= j (string-length s)) #f)
@@ -237,9 +239,25 @@
                         (skip (+ k 2))))
                    ((char=? (string-ref s k) #\") (loop (1+ k) depth))
                    (else (skip (1+ k))))))
+          ((escape-at? s j)
+           (match (catch #t (lambda () (call-with-values (lambda () (read-datum-at s (1+ j))) list))
+                    (lambda _ #f))
+             ((_ end) (loop end depth))
+             (#f (list 'escape j))))
           ((char=? (string-ref s j) #\[) (loop (1+ j) (1+ depth)))
           ((char=? (string-ref s j) #\]) (if (zero? depth) j (loop (1+ j) (1- depth))))
           (else (loop (1+ j) depth)))))
+
+(define (bad-escape line)
+  (oops line ",( is not a complete Scheme expression (unbalanced parentheses?)"))
+
+;; Does a ,(expr) escape start at index I?  (A comma is a command only at
+;; the start of a word.)
+(define (escape-at? s i)
+  (and (< (1+ i) (string-length s))
+       (char=? (string-ref s i) #\,)
+       (char=? (string-ref s (1+ i)) #\()
+       (or (zero? i) (memv (string-ref s (1- i)) '(#\space #\newline #\( #\[)))))
 
 ;; Read ",name[…]" / ",name[attributes][…]" starting at the "[" at OPEN.
 ;; Attributes commands read the attribute bracket first (as in HTML:
@@ -250,6 +268,7 @@
     (match close
       (('quote q) (oops (+ line (string-count (substring s open q) #\newline))   ; LINE is the bracket's
                         ",~a: a \" is not closed on the same line" name))
+      (('escape e) (bad-escape (+ line (string-count (substring s open e) #\newline))))
       (#f (oops line ",~a[ is never closed with ]" name))
       (_ #t))
     (let ((first (substring s (1+ open) close))
@@ -292,7 +311,11 @@
            (let ((n (string-ref s (1+ i)))) (or (char-alphabetic? n) (char=? n #\())))
       (if (char=? (string-ref s (1+ i)) #\()
           ;; ,(expr) — read one Scheme datum and splice it in
-          (call-with-values (lambda () (read-datum-at s (1+ i)))
+          (call-with-values
+              (lambda ()
+                (catch #t
+                  (lambda () (read-datum-at s (1+ i)))
+                  (lambda _ (bad-escape (line-at s i line)))))
             (lambda (datum end)
               (loop end end (cons datum (text-upto i)))))
           (let* ((ne (name-end s (1+ i)))

@@ -147,6 +147,25 @@
 (fails ",tip\n  First line\n  see ,link[:title \"never\n  closed][x]" "line 3: ,link: a \" is not closed on the same line")
 (fails "a ,link[:title :href x][y]" "line 1: ,link: :title needs a value")
 
+;;; ,(expr) escapes
+(html "Total: ,(+ 2 3) items" "<p>Total: 5 items</p>")
+(html "x ,(> 1 2) y" "<p>x  y</p>")
+(html "See ,(em \"this\") and ,(quote (b \"that\"))" "<p>See <em>this</em> and <b>that</b></p>")
+(html "x ,em[a ,(string-append \"]\" \"[\") c] y" "<p>x <em>a ][ c</em> y</p>")
+(html "x ,(string-append \"a\"\n  \"b\") y" "<p>x ab y</p>")
+(fails "Some text.\n\nx ,(string-append \"a\" y" "line 3: ,( is not a complete Scheme expression (unbalanced parentheses?)")
+(fails ",tip\n  x ,em[,(car \"a\" y]" "line 2: ,( is not a complete Scheme expression (unbalanced parentheses?)")
+
+;;; uq-error-message never fails on an unusual error shape
+(use-modules (uq compile))
+(check "uq-error-message: syntax error"
+       (uq-error-message 'syntax-error '(#f "definition in expression context, where definitions are not allowed,"
+                                         ((line . 0)) (define x 1) #f))
+       "definition in expression context, where definitions are not allowed (define x 1)")
+(check "uq-error-message: format mismatch falls back"
+       (uq-error-message 'misc-error '(#f "~a ~a" (1)))
+       "misc-error: (#f \"~a ~a\" (1))")
+
 ;;; ,(expr) with non-ASCII text inside
 (html "½ ,(string-append \"é\" \"½\") after" "<p>½ é½ after</p>")
 (check "parse attributes"
