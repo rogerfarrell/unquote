@@ -14,7 +14,7 @@
 ;;; You should have received a copy of the GNU General Public License
 ;;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-;;; (uq tags) -- the generic components: document structure, lists and
+;;; (uq tags) -- the generic components: paragraphs, lists and
 ;;; inline markup.  Project-specific components go in their own module;
 ;;; see examples/recipe/tags.scm.
 
@@ -28,7 +28,6 @@
 (define (plain body) (string-trim-both (apply string-append (filter string? body))))
 
 ;;; structure
-(define-tag block (document . body) `(article ,@body))
 (define-tag block:inline (p . body) `(p ,@body))
 (define-tag block (ul . body) #:wrap li `(ul ,@body))
 (define-tag block (ol . body) #:wrap li `(ol ,@body))

@@ -53,8 +53,9 @@ the way.  Requires Guile 3.0.
    decides what a group may hold.
 4. =parse-inline=: each run is parsed once, lines joined with newlines, for
    inline commands, brackets, attributes and =,(expr)= escapes.
-5. The result is one Scheme expression, =(document …)=.  It is evaluated in
-   a module that uses the component modules and written with =sxml->xml=.
+5. The result is one Scheme expression, =(list …)=: the top-level blocks
+   as siblings, with no root element.  It is evaluated in a module that
+   uses the component modules and written with =write-html=.
 
 The tag registry is global and filled when a component module loads, so
 component modules must be loaded before a document is parsed.

@@ -41,7 +41,7 @@ exec guile --no-auto-compile -e main -s "$0" "$@"
      (head (meta (@ (charset "utf-8")))
            (meta (@ (name "viewport") (content "width=device-width, initial-scale=1")))
            (title ,(or (page-title recipe) "Recipe")))
-     (body ,recipe)))
+     (body ,@recipe)))
 
 (define* (build in #:optional out)
   (unless (compile-uq in #:out out #:tags '((recipe tags)) #:page page #:indent #t)

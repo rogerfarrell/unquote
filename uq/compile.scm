@@ -39,7 +39,7 @@
 (define (component-module tags)
   "A fresh module using (uq tags) and each module name in TAGS.  A name
 defined in more than one of them resolves to the later module, quietly:
-a project may redefine a generic component such as document."
+a project may redefine a generic component such as em."
   (let ((m (make-fresh-user-module)))
     ;; as #:duplicates (replace last) in define-module
     (set-module-duplicates-handlers! m (lookup-duplicates-handlers '(replace last)))
@@ -53,14 +53,15 @@ a project may redefine a generic component such as document."
   (call-with-input-file file read-markup-document))
 
 (define* (uq-file->sxml file #:key (tags '()))
-  "FILE parsed and evaluated: the SXML for its document.  Errors are raised."
+  "FILE parsed and evaluated: its top-level nodes, as a list of SXML
+siblings with no root element.  Errors are raised."
   (let ((env (component-module tags)))
     (eval (call-with-input-file file read-markup-document) env)))
 
 ;;; Helpers for #:page procedures
 
 (define (page-title sxml)
-  "The text of the first h1 in SXML, or #f."
+  "The text of the first h1 in SXML (a node or a list of nodes), or #f."
   (define (text x)
     (cond ((string? x) x)
           ((and (pair? x) (eq? (car x) '@)) "")
@@ -69,7 +70,8 @@ a project may redefine a generic component such as document."
   (let find ((x sxml))
     (cond ((not (pair? x)) #f)
           ((eq? (car x) 'h1) (string-trim-both (text x)))
-          (else (any find (cdr x))))))
+          ((symbol? (car x)) (any find (cdr x)))      ; an element: its children
+          (else (any find x)))))                      ; a list of nodes
 
 ;;; Indented output
 ;;
@@ -189,7 +191,8 @@ written as a fragment.  INDENT is passed to write-sxml."
 (define* (compile-uq in #:key out (tags '()) (page #f) (indent #f))
   "Compile the .uq file IN to the HTML file OUT (default: IN with .html).
 The output is a fragment.  PAGE, if given, is a procedure from the
-document's SXML to the SXML to write instead; if that is an html element,
+document's nodes (a list of siblings) to the SXML to write instead --
+splice them with ,@ -- and if the result is an html element,
 a doctype is added.  INDENT (#t, or a number of spaces) writes indented
 HTML; see write-sxml.  On success,
 report IN -> OUT and return OUT.  On an error, report FILE: MESSAGE on

@@ -124,7 +124,7 @@ component definitions.  =:name value= is there for the occasional case.
 
 * Defining components
 
-=(uq tags)= provides the generic components: =document=, =p=, =ul=, =ol=,
+=(uq tags)= provides the generic components: =p=, =ul=, =ol=,
 =li=, =em=, =strong=, =link=, =image= and =frac=.  Anything specific to a
 kind of page goes in a module of its own; =examples/recipe/tags.scm=
 defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
@@ -184,20 +184,22 @@ in the build script, passed as =#:page=:
      (head (meta (@ (charset "utf-8")))
            (title ,(page-title recipe)))
      (body (header (a (@ (href "/")) "Recipes"))
-           (main ,recipe))))
+           (main ,@recipe))))
 
 (compile-uq "recipe.uq" #:tags '((recipe tags)) #:page page #:indent #t)
 #+end_src
 
 - =#:out= sets the output file; the default replaces =.uq= with =.html=.
 - =#:tags= lists extra component modules, loaded before parsing.
-- =#:page= is a procedure from the document's SXML to the SXML to write.
+- A document has no root element: its top-level blocks are written as
+  siblings.  =#:page= receives them as a list of SXML nodes, to splice
+  with =,@=.
+- =#:page= is a procedure from the document's nodes to the SXML to write.
   If its result is an =html= element, an HTML5 doctype is added; anything
   else is written as a fragment.  =page-title= gives the text of the first
   =h1=, for the =<title>=.
-- The document's own root comes from the =document= component (an
-  =<article>= in =(uq tags)=).  A project can redefine it in its tags
-  module, since later =#:tags= modules take precedence.
+- A project's tags module may redefine a generic component (=em=, =p=,
+  …); later =#:tags= modules take precedence.
 - =#:indent= (=#t= for two spaces, or a number) writes indented HTML
   instead of one long line.  Indentation is added only where it cannot
   change the rendering: elements whose children are all elements are

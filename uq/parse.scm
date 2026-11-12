@@ -384,12 +384,13 @@
                         (cons (make-node (node-line n) (node-indent n) head '()) (node-kids n)))))
           (call name addr (convert-children kids (wrap-of name)))))))))
 
-(define (tree->expr root) `(document ,@(convert-children (node-kids root) (wrap-of 'document))))
+;; A document has no root element: its top-level blocks are siblings.
+(define (tree->expr root) `(list ,@(convert-children (node-kids root) 'p)))
 
 ;;; ================= Entry points =================
-;; whole document -> one expression, (document …)
+;; whole document -> one expression, (list …): a list of sibling nodes
 (define (read-markup-document port) (tree->expr (port->tree port)))
-;; fragment -> list of expressions (no document wrapper)
+;; fragment -> list of expressions, one per top-level node
 (define (markup-string->exprs str)
   (convert-children (node-kids (call-with-input-string str port->tree)) 'p))
 
