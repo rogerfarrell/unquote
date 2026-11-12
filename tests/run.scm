@@ -156,6 +156,20 @@
 (fails "Some text.\n\nx ,(string-append \"a\" y" "line 3: ,( is not a complete Scheme expression (unbalanced parentheses?)")
 (fails ",tip\n  x ,em[,(car \"a\" y]" "line 2: ,( is not a complete Scheme expression (unbalanced parentheses?)")
 
+;;; Errors while evaluating carry the line they came from
+;; (Guile words its own errors differently when compiled, so for those
+;; only the line is checked.)
+(define (fails-at markup prefix)
+  (let ((msg (error-text markup)))
+    (check markup (and msg (string-prefix? prefix msg)) #t)))
+(fails-at "Some text.\n\nx ,(car '()) y" "line 3: ")
+(fails "x\n\n,photo[:width 3in][A jar]" "line 3: ,photo needs a file: ,photo[file][alt text]")
+(fails-at ",tip\n  a\n  b ,em[x ,(car '())]" "line 3: ")
+(fails-at ",tip\n  a ,em[x\n  y ,(vector-ref (vector) 0)]" "line 3: ")
+(check "strip-line-wrappers shows the plain expression"
+       (map strip-line-wrappers (markup-string->exprs "a ,em[b] ,(+ 1 2)"))
+       '((p "a " (em "b") " " (+ 1 2))))
+
 ;;; uq-error-message never fails on an unusual error shape
 (use-modules (uq compile))
 (check "uq-error-message: syntax error"

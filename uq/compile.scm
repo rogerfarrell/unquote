@@ -34,7 +34,8 @@
   #:export (component-module
             uq-file->expr uq-file->sxml
             page-title write-sxml write-html
-            compile-uq uq-error-message))
+            compile-uq)
+  #:re-export (uq-error-message))
 
 (define (component-module tags)
   "A fresh module using (uq tags) and each module name in TAGS.  A name
@@ -178,20 +179,6 @@ written as a fragment.  INDENT is passed to write-sxml."
   (newline port))
 
 ;;; Compiling
-
-(define (uq-error-message key args)
-  "A one-line message for an exception raised while compiling."
-  (define (fallback) (format #f "~a: ~s" key args))
-  (match (cons key args)
-    ;; syntax errors: (who message source-properties form subform)
-    (('syntax-error _ (? string? msg) _ form . _)
-     (format #f "~a ~s" (string-trim-right msg #\,) form))
-    ;; error, misc-error and friends: (who format-string format-args . _)
-    ((_ _ (? string? fmt) (? list? fargs) . _)
-     ;; Guile's error messages are simple-format strings (~a, ~s); unlike
-     ;; format, simple-format raises on a mismatch without printing anything
-     (catch #t (lambda () (apply simple-format #f fmt fargs)) (lambda _ (fallback))))
-    (_ (fallback))))
 
 (define (default-output in)
   (string-append (if (string-suffix? ".uq" in) (string-drop-right in 3) in) ".html"))

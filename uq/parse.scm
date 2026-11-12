@@ -18,7 +18,8 @@
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 textual-ports) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
   #:export (define-tag attribute attribute-values attribute-list markup enable-markup-reader!
-            read-markup-document markup-string->exprs))
+            read-markup-document markup-string->exprs
+            at-line strip-line-wrappers uq-error-message))
 
 ;;; ================= Component registry =================
 ;; name -> (kind attributes wrap), attributes being #f, optional or required
@@ -114,8 +115,51 @@
     ((_ k n b w a m d (expr ...))
      (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm 'w d)))))
 
-(define (oops line fmt . args)
-  (error (string-append "line " (number->string line) ": " (apply format #f fmt args))))
+;;; ================= Errors =================
+;; Every error that knows its line is raised under the key uq-error, as
+;; (uq-error #f "~a" ("line N: message") #f) -- the shape of misc-error, so
+;; anything that formats Guile errors formats these too.
+(define (located line message)
+  (scm-error 'uq-error #f "~a"
+             (list (string-append "line " (number->string line) ": " message)) #f))
+
+(define (oops line fmt . args) (located line (apply format #f fmt args)))
+
+(define (uq-error-message key args)
+  "A one-line message for an exception: Guile's own, or uq's."
+  (define (fallback) (format #f "~a: ~s" key args))
+  (match (cons key args)
+    ;; syntax errors: (who message source-properties form subform)
+    (('syntax-error _ (? string? msg) _ form . _)
+     (format #f "~a ~s" (string-trim-right msg #\,) form))
+    ;; uq-error, error, misc-error and friends: (who format-string format-args . _)
+    ((_ _ (? string? fmt) (? list? fargs) . _)
+     ;; Guile's error messages are simple-format strings (~a, ~s); unlike
+     ;; format, simple-format raises on a mismatch without printing anything
+     (catch #t (lambda () (apply simple-format #f fmt fargs)) (lambda _ (fallback))))
+    (_ (fallback))))
+
+;; The parser wraps every component call and ,(expr) escape in
+;;   ((@ (uq parse) at-line) LINE (lambda () EXPR))
+;; so an error raised while evaluating it -- a component's own check, or a
+;; failing escape -- is reported with the line it came from.  An error that
+;; already has a line passes through, so the innermost line wins.
+(define (at-line line thunk)
+  (catch #t
+    thunk
+    (lambda (key . args)
+      (if (memq key '(uq-error quit))
+          (apply throw key args)
+          (located line (uq-error-message key args))))))
+
+(define (wrap-line line expr) `((@ (uq parse) at-line) ,line (lambda () ,expr)))
+
+(define (strip-line-wrappers x)
+  "X without the at-line wrappers, for showing the expression to people."
+  (match x
+    ((('@ ('uq 'parse) 'at-line) _ ('lambda () expr)) (strip-line-wrappers expr))
+    ((? pair?) (cons (strip-line-wrappers (car x)) (strip-line-wrappers (cdr x))))
+    (_ x)))
 
 ;;; ================= Lines -> indentation tree =================
 (define-record-type <node>
@@ -298,7 +342,8 @@
 (define (nl->sp str) (string-map (lambda (c) (if (char=? c #\newline) #\space c)) str))
 (define (line-at s i line) (+ line (string-count (substring s 0 i) #\newline)))
 ;; ATTRS is #f for commands without attributes; otherwise a quoted list.
-(define (call name attrs parts) `(,name ,@(if attrs `(',attrs) '()) ,@parts))
+(define (call name attrs parts line)
+  (wrap-line line `(,name ,@(if attrs `(',attrs) '()) ,@parts)))
 
 (define (parse-inline s line)
   (let loop ((i 0) (start 0) (acc '()))
@@ -317,7 +362,7 @@
                   (lambda () (read-datum-at s (1+ i)))
                   (lambda _ (bad-escape (line-at s i line)))))
             (lambda (datum end)
-              (loop end end (cons datum (text-upto i)))))
+              (loop end end (cons (wrap-line (line-at s i line) datum) (text-upto i)))))
           (let* ((ne (name-end s (1+ i)))
                  (name (string->symbol (substring s (1+ i) ne)))
                  (here (line-at s i line))
@@ -328,14 +373,14 @@
              ((and (< ne (string-length s)) (char=? (string-ref s ne) #\[))
               (call-with-values (lambda () (read-brackets s ne name here))
                 (lambda (inner addr after)
-                  (loop after after (cons (call name addr (parse-inline inner here)) (text-upto i))))))
+                  (loop after after (cons (call name addr (parse-inline inner here) here) (text-upto i))))))
              ((attributes-required? name) (missing-attributes name here))
              (else                       ; declared extent: next word / rest of line
               (let* ((after (if (and (< ne (string-length s)) (char=? (string-ref s ne) #\space)) (1+ ne) ne))
                      (stop (if (eq? kind 'inline:word) char-whitespace? (lambda (c) (char=? c #\newline))))
                      (we (or (string-index s stop after) (string-length s))))
                 (loop we we (cons (call name (and (attributes? name) '())   ; optional: none given
-                                        (parse-inline (substring s after we) here))
+                                        (parse-inline (substring s after we) here) here)
                                   (text-upto i)))))))))
      (else (loop (1+ i) start acc)))))
 
@@ -405,7 +450,7 @@
       (if (null? run) out
           (let ((run (reverse run)))
             (append (reverse (map convert-block (append-map text-blocks run)))
-                    (cons (call wrap #f (run-parts run)) out)))))
+                    (cons (call wrap #f (run-parts run) (node-line (car run))) out)))))
     (match kids
       (() (reverse (flush)))
       ((k . rest)
@@ -422,7 +467,7 @@
       (_ (let loop ((nodes group) (run '()) (parts '()))
            (define (flush) (if (null? run) parts (append parts (run-parts (reverse run)))))
            (match nodes
-             (() (call wrap #f (flush)))
+             (() (call wrap #f (flush) (node-line (car group))))
              ((k . rest)
               (if (block-head k)
                   (loop rest '() (append (flush) (list (convert-block k))))
@@ -459,12 +504,12 @@
             (let ((extra (find (lambda (k) (not (blank? k))) rest)))
               (when extra
                 (oops (node-line extra) ",~a holds one run of text; no blank lines or blocks inside it" name)))
-            (call name addr (parse-inline text line)))))
+            (call name addr (parse-inline text line) (node-line n)))))
        ((block:block)
         ;; text on the command's own line is simply the first line of its body
         (let ((kids (if (string-null? head) (node-kids n)
                         (cons (make-node (node-line n) (node-indent n) head '()) (node-kids n)))))
-          (call name addr (convert-children kids (wrap-of name)))))))))
+          (call name addr (convert-children kids (wrap-of name)) (node-line n))))))))
 
 ;; A document has no root element: its top-level blocks are siblings.
 (define (tree->expr root) `(list ,@(convert-children (node-kids root) default-wrap)))

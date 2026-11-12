@@ -32,7 +32,7 @@
 (define (render file show? specs)
   (let* ((env  (component-module specs))
          (expr (call-with-input-file file read-markup-document)))
-    (when show? (pretty-print expr (current-error-port)))
+    (when show? (pretty-print (strip-line-wrappers expr) (current-error-port)))
     (sxml->xml (eval expr env))
     (newline)))
 

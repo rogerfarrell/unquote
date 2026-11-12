@@ -300,9 +300,12 @@ on the order in which escapes run.
 ** Errors
 An escape that is not a complete expression is a parse error with its
 line number: =line 3: ,( is not a complete Scheme expression (unbalanced
-parentheses?)=.  An error /while evaluating/ happens after parsing, so it
-is reported with the file name but no line: =recipe.uq: Wrong type
-(expecting pair): ()=.
+parentheses?)=.  An error /while evaluating/ an escape -- or raised by a
+component, such as =photo='s check for a file -- is reported with the
+line it came from too: =recipe.uq: line 7: ,photo needs a file: …=.  The
+parser wraps every component call and escape so that it can; =--expr=
+shows the expression without those wrappers.  Inside the =markup= macro,
+lines count from the start of the markup string.
 
 ** Trust
 An escape can run any Scheme code with the permissions of whoever builds
