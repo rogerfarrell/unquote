@@ -273,6 +273,35 @@
          (lambda (k . a) (uq-error-message k a)))
        "toc-pass: the procedure returned \"x\" for <h1>; give #f, #t or a level number")
 
+;; toc-pass with prior entries: (proc element prior), prior most recent first
+(check "toc-pass: prior -- list only the first h1; only it gets an id"
+       (render-post ",toc\n\n,section A\n,section B"
+                    (toc-pass (lambda (el prior) (and (eq? (element-tag el) 'h1) (null? prior) 0))))
+       "<nav class=\"toc\"><ol><li><a href=\"#a\">A</a></li></ol></nav><h1 id=\"a\">A</h1><h1>B</h1>")
+(check "toc-pass: prior -- h2s only under a chapter whose title starts with Ingredients"
+       (render-post ",toc\n\n,section Ingredients\n,subsection Dry\n,section Directions\n,subsection Mix"
+                    (toc-pass (lambda (el prior)
+                                (case (element-tag el)
+                                  ((h1) 0)
+                                  ((h2) (let ((chapter (find (lambda (e) (= (car e) 0)) prior)))
+                                          (and chapter (string-prefix? "Ingredients" (element-text (cdr chapter))) 1)))
+                                  (else #f)))))
+       (string-append "<nav class=\"toc\"><ol><li><a href=\"#ingredients\">Ingredients</a><ol><li><a href=\"#dry\">Dry</a></li></ol></li>"
+                      "<li><a href=\"#directions\">Directions</a></li></ol></nav>"
+                      "<h1 id=\"ingredients\">Ingredients</h1><h2 id=\"dry\">Dry</h2><h1 id=\"directions\">Directions</h1><h2>Mix</h2>"))
+(let ((calls '()))
+  (render-post ",toc\n\n,section A\n,subsection B\n,section C"
+               (toc-pass (lambda (el prior)
+                           (set! calls (cons (cons (element-tag el) (map (lambda (e) (element-text (cdr e))) prior)) calls))
+                           (and (memq (element-tag el) '(h1 h2)) (if (eq? (element-tag el) 'h1) 0 1)))))
+  (check "toc-pass: called once per element, in order, with prior most recent first"
+         (reverse calls)
+         '((h1) (h2 "A") (h1 "B" "A"))))
+(check "toc-pass: a variadic procedure receives prior too"
+       (render-post ",toc\n\n,section A\n,section B"
+                    (toc-pass (lambda (el . rest) (and (eq? (element-tag el) 'h1) (null? (car rest)) 0))))
+       "<nav class=\"toc\"><ol><li><a href=\"#a\">A</a></li></ol></nav><h1 id=\"a\">A</h1><h1>B</h1>")
+
 (check "slugify" (map slugify '("Dry goods" "Crème brûlée!" "  " "3 Steps")) '("dry-goods" "crème-brûlée" "section" "3-steps"))
 
 ;;; Quoted attribute values

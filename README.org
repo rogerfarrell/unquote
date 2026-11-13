@@ -422,6 +422,26 @@ one.  To list chapters and key points by class:
                   (else #f))))
 #+end_src
 
+Given a second argument, the procedure also receives the entries accepted
+so far, most recent first, as =(level . element)= pairs, so a choice can
+depend on what came before.  It is called once per element, in document
+order.  To list =h2=s only under chapters whose title starts with
+"Ingredients":
+
+#+begin_src scheme
+(toc-pass (lambda (el prior)
+            (case (element-tag el)
+              ((h1) 0)
+              ((h2) (let ((chapter (find (lambda (e) (= (car e) 0)) prior)))
+                      (and chapter
+                           (string-prefix? "Ingredients" (element-text (cdr chapter)))
+                           1)))
+              (else #f))))
+#+end_src
+
+Elements in =prior= do not have their generated ids yet; ids are assigned
+once every choice is made.
+
 - A heading without an =id= gets one from its text (=dry-goods=), made
   unique (=ingredients-2=) and different from ids already in the document.
 - Link text is the heading's text without markup.
