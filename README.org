@@ -299,6 +299,28 @@ Scan ,qr[https://example.com/recipes/cheeseburger-helper][the recipe online].
 - The result is an inline =<svg class="qr">= with a quiet zone, scaled
   to whatever size CSS gives it.
 
+*** Colours, including CMYK
+
+The modules are a =path= with class =qr-dark= and the background a =rect=
+with class =qr-light=, black on white by default.  How to recolour them
+depends on the renderer:
+
+- *In a browser*, page CSS works: =.qr-dark { fill: #123 }=.
+- *In WeasyPrint*, page CSS does not reach inside inline SVG -- but CSS
+  /inside/ the SVG does, =device-cmyk()= included.  Set =qr-css= in the
+  build script and it is placed in a =<style>= in every QR code:
+
+  #+begin_src scheme
+  (use-modules (uq compile) (uq qr))
+
+  (parameterize ((qr-css ".qr-dark  { fill: device-cmyk(0 0 0 1) }
+                          .qr-light { fill: device-cmyk(0 0 0 0) }"))
+    (compile-uq "recipe.uq" #:tags '((uq qr))))
+  #+end_src
+
+  The PDF then draws the code in =/DeviceCMYK=.  Browsers do not support
+  =device-cmyk()= and fall back to black and white.
+
 * Build scripts
 
 =(uq compile)= compiles =.uq= files to HTML.  The output is a fragment;

@@ -423,6 +423,18 @@
                                      "<p>Scan <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 33 33\" class=\"qr\" role=\"img\" aria-label=\"the recipe\"")
                     #t)
                #t)
+        (check "qr: colour hooks are classes over default fills"
+               (and (string-contains (svg ",qr[0123456789]") "<rect class=\"qr-light\" width=\"100%\" height=\"100%\" fill=\"#fff\"></rect>")
+                    (string-contains (svg ",qr[0123456789]") "<path class=\"qr-dark\" d=\"")
+                    #t)
+               #t)
+        (check "qr: no <style> unless qr-css is set" (string-contains (svg ",qr[0123456789]") "<style>") #f)
+        (check "qr: qr-css goes in a <style> inside the svg"
+               (and (string-contains
+                     (parameterize ((qr-css ".qr-dark { fill: device-cmyk(0 0 0 1) }")) (svg ",qr[0123456789]"))
+                     "shape-rendering=\"crispEdges\"><style>.qr-dark { fill: device-cmyk(0 0 0 1) }</style><rect")
+                    #t)
+               #t)
         (check "qr: the data is the label when there is none"
                (and (string-contains (svg ",qr[0123456789]") "aria-label=\"0123456789\"") #t) #t)
         (check "qr: :ecc changes the code"

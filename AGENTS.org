@@ -137,6 +137,10 @@ component modules must be loaded before a document is parsed.
 - Keep =(uq tags)= generic and free of dependencies beyond Guile.  Components
   that need a library go in their own module, as =(uq qr)= does, and their
   tests skip when the library is missing.
+- WeasyPrint renders inline SVG in isolation: page CSS does not apply
+  inside it, nor does =currentColor= inherit the page's =color=.  CSS in a
+  =<style>= inside the SVG does (=(uq qr)='s =qr-css=).  Checked against
+  WeasyPrint 70 by reading the PDF's colour operators.
 - Components for a particular kind of page go in
   their own module under =examples/= (or the user's project), using
   =(uq parse)= and, for helpers such as =plain=, =(uq tags)=.

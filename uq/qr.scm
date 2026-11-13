@@ -26,6 +26,16 @@
 ;;; accessible name; without one, DATA is used.  :ecc is the error
 ;;; correction level -- low (the default), medium, quartile or high.
 ;;; The result is an inline SVG with class "qr"; size it with CSS.
+;;;
+;;; Colours: the modules are a path with class "qr-dark", the background a
+;;; rect with class "qr-light", black and white by default.  In a browser,
+;;; page CSS can restyle them.  WeasyPrint does not apply page CSS inside
+;;; inline SVG, so for print set qr-css: its CSS goes in a <style> inside
+;;; every QR code, where WeasyPrint honours it, device-cmyk() included:
+;;;
+;;;   (parameterize ((qr-css ".qr-dark { fill: device-cmyk(0 0 0 1) }
+;;;                           .qr-light { fill: device-cmyk(0 0 0 0) }"))
+;;;     (compile-uq "recipe.uq" #:tags '((uq qr))))
 
 (define-module (uq qr)
   #:use-module (uq parse)
@@ -33,7 +43,11 @@
   #:use-module (qr-code)
   #:use-module ((qr-code encoder) #:select (QR-code-size qr-code-module))
   #:use-module (ice-9 match)
-  #:use-module (srfi srfi-1))
+  #:use-module (srfi srfi-1)
+  #:export (qr-css))
+
+;; CSS to place inside every QR code's SVG, or #f.
+(define qr-css (make-parameter #f))
 
 (define ecc-levels
   `(("low" . ,ECC-LOW) ("medium" . ,ECC-MEDIUM) ("quartile" . ,ECC-QUARTILE) ("high" . ,ECC-HIGH)))
@@ -57,8 +71,10 @@
              (viewBox ,(string-append "0 0 " side " " side))
              (class "qr") (role "img") (aria-label ,label)
              (shape-rendering "crispEdges"))
-          (rect (@ (width "100%") (height "100%") (fill "#fff")))
-          (path (@ (d ,d) (fill "#000"))))))
+          ,@(if (qr-css) `((style ,(qr-css))) '())
+          ;; fills as presentation attributes, so any CSS rule overrides them
+          (rect (@ (class "qr-light") (width "100%") (height "100%") (fill "#fff")))
+          (path (@ (class "qr-dark") (d ,d) (fill "#000"))))))
 
 (define-tag inline (qr . label) #:required-attributes attrs
   (let* ((data (main-attribute attrs 'data))
