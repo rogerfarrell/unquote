@@ -316,6 +316,29 @@
                       "<h1 data-toc=\"Prep\" id=\"preparing-the-dough-the-night-before\">Preparing the dough the night before</h1>"
                       "<h1 id=\"baking\">Baking</h1>"))
 
+;;; (uq sxml) and attribute helpers: building one component on another
+(use-modules ((uq sxml) #:prefix sxml:))
+(check "(uq compile post) re-exports (uq sxml)" (eq? add-class sxml:add-class) #t)
+(check "add-class"
+       (map (lambda (el) (add-class el "x"))
+            '((a "t") (a (@ (class "y")) "t") (a (@ (class "y x")) "t")))
+       '((a (@ (class "x")) "t") (a (@ (class "y x")) "t") (a (@ (class "y x")) "t")))
+(check "remove-element-attribute"
+       (map (lambda (el) (remove-element-attribute el 'id))
+            '((h1 (@ (id "a") (class "b")) "t") (h1 "t")))
+       '((h1 (@ (class "b")) "t") (h1 "t")))
+(check "set-attribute replaces; remove-attributes keeps plain words"
+       (list (set-attribute '("x.com" (title "a") (rel "r")) 'title "b")
+             (remove-attributes '("x.com" (title "a") (rel "r")) '(title rel)))
+       '(("x.com" (rel "r") (title "b")) ("x.com")))
+;; ,offsite: a link that opens in a new tab and is marked external
+(define-tag inline (offsite . body) #:required-attributes attrs
+  (add-class (apply link (set-attribute attrs 'target "_blank") body) "external"))
+(html "see ,offsite[https://example.com :target _self][jars]"
+      "<p>see <a href=\"https://example.com\" target=\"_blank\" class=\"external\">jars</a></p>")
+(fails "see ,offsite[:title x][jars]"
+       "line 1: ,offsite needs its href: as the first word or as :href")
+
 (check "slugify" (map slugify '("Dry goods" "Crème brûlée!" "  " "3 Steps")) '("dry-goods" "crème-brûlée" "section" "3-steps"))
 
 ;;; Quoted attribute values

@@ -238,6 +238,32 @@ and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 - =(attribute-values attrs)= — the plain words.
 - =(attribute-list attrs ['(excluded …)])= — the =:name value= pairs as SXML
   attributes.
+- =(set-attribute attrs 'name value)= and =(remove-attributes attrs '(name …))=
+  — =attrs= with a =:name= pair replaced or removed, for passing them on
+  to another component.
+
+** Building on other components
+A component is an ordinary procedure, called as =(name attrs body …)= if it
+takes attributes and =(name body …)= if not, so one component can call
+another and adjust what it returns.  =(uq sxml)= has helpers for changing
+elements: =add-class=, =set-element-attribute=, =remove-element-attribute=,
+=element-attribute=, =has-class?= and the rest listed under
+post-processing.  A link that opens in a new tab and is marked external:
+
+#+begin_src scheme
+(use-modules (uq parse) (uq tags) (uq sxml))
+
+(define-tag inline (offsite . body) #:required-attributes attrs
+  (add-class (apply link (set-attribute attrs 'target "_blank") body) "external"))
+#+end_src
+
+#+begin_example
+,offsite[https://example.com][Jar sizes]
+#+end_example
+
+Errors from =link= name =,offsite=, the command the editor wrote.  The
+outer declaration is its own: =,offsite= states its kind and attributes
+rather than inheriting =link='s.
 
 =#:wrap= names the tag each blank-line group is wrapped in.  The wrapper's
 own kind decides what a group may hold: a =block:inline= wrapper (=p=) holds
@@ -469,11 +495,13 @@ A component sets it, here from a =:toc= the editor gives:
 
 The heading's generated =id= still comes from its full text.
 
-The utilities: =element?=, =element-tag=, =element-attributes=,
+The utilities come from =(uq sxml)=, re-exported here so a pass needs only
+this module: =element?=, =element-tag=, =element-attributes=,
 =element-children=, =element-attribute=, =set-element-attribute=,
-=has-class?=, =element-text=, =map-elements= (rewrite elements, outermost
-first, with an optional =#:skip?=), =find-elements= (collect elements in
-document order) and =slugify=.  Passes are plain functions, so they also
+=remove-element-attribute=, =add-class=, =has-class?=, =element-text=,
+=map-elements= (rewrite elements, outermost first, with an optional
+=#:skip?=) and =find-elements= (collect elements in document order).
+=(uq compile post)= adds =slugify=.  Passes are plain functions, so they also
 apply to the output of the =markup= macro.
 
 * Scheme expressions in a document

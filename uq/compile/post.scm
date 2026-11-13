@@ -26,74 +26,14 @@
   #:use-module (ice-9 match)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-11)               ; let-values
-  #:export (element? element-tag element-attributes element-children
-            element-attribute set-element-attribute has-class?
-            element-text map-elements find-elements slugify
-            toc-pass))
+  #:use-module (uq sxml)
+  ;; the SXML utilities are re-exported, so a pass needs only this module
+  #:re-export (element? element-tag element-attributes element-children
+               element-attribute set-element-attribute remove-element-attribute
+               add-class has-class? element-text map-elements find-elements)
+  #:export (slugify toc-pass))
 
-;;; ---------------- SXML utilities ----------------
-
-(define (element? x)
-  (and (pair? x) (symbol? (car x)) (not (memq (car x) '(@ *TOP* *PI* *ENTITY* *COMMENT*)))))
-(define (element-tag el) (car el))
-
-(define (element-attributes el)
-  "EL's attributes as an alist of (name value)."
-  (match (cdr el)
-    ((('@ . attrs) . _) attrs)
-    (_ '())))
-
-(define (element-children el)
-  (match (cdr el)
-    ((('@ . _) . kids) kids)
-    (kids kids)))
-
-(define (element-attribute el name)
-  (match (assq name (element-attributes el))
-    ((_ value) value)
-    (_ #f)))
-
-(define (set-element-attribute el name value)
-  "EL with attribute NAME set to VALUE."
-  `(,(element-tag el)
-    (@ ,@(remove (lambda (a) (eq? (car a) name)) (element-attributes el)) (,name ,value))
-    ,@(element-children el)))
-
-(define (has-class? el class)
-  (and=> (element-attribute el 'class)
-         (lambda (c) (and (member class (string-tokenize c)) #t))))
-
-(define (element-text x)
-  "The text in X (a node or list of nodes), without markup."
-  (cond ((string? x) x)
-        ((element? x) (string-concatenate (map element-text (element-children x))))
-        ((pair? x) (string-concatenate (map element-text x)))   ; a list of nodes
-        (else "")))
-
-(define* (map-elements proc doc #:key (skip? (const #f)))
-  "DOC with each element E replaced by (PROC E), outermost first; PROC's
-result is then walked in turn.  Elements for which SKIP? is true are left
-as they are, with their contents.  DOC may be a node or a list of nodes."
-  (let walk ((x doc))
-    (cond ((and (element? x) (skip? x)) x)
-          ((element? x)
-           (let ((e (proc x)))
-             (if (element? e)
-                 (let ((attrs (match (cdr e) ((('@ . a) . _) (list (cons '@ a))) (_ '()))))
-                   `(,(element-tag e) ,@attrs ,@(map walk (element-children e))))
-                 e)))
-          ((and (pair? x) (not (symbol? (car x)))) (map walk x))
-          (else x))))
-
-(define* (find-elements pred doc #:key (skip? (const #f)))
-  "The elements in DOC satisfying PRED, in document order, not looking
-inside elements for which SKIP? is true."
-  (let walk ((x doc))
-    (cond ((and (element? x) (skip? x)) '())
-          ((element? x)
-           (append (if (pred x) (list x) '()) (append-map walk (element-children x))))
-          ((and (pair? x) (not (symbol? (car x)))) (append-map walk x))
-          (else '()))))
+;;; ---------------- ids ----------------
 
 (define (slugify text)
   "TEXT as an id: lower case, runs of other characters as one hyphen."

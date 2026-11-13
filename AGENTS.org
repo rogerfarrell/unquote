@@ -23,7 +23,8 @@ Prefer moving complexity into components or the parser.
 | =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
 | =uq/tags.scm=      | generic components: structure, lists, inline markup        |
 | =uq/compile.scm=   | =compile-uq= and helpers: .uq file -> HTML, for build scripts |
-| =uq/compile/post.scm= | post passes (=toc-pass=) and SXML utilities for them   |
+| =uq/compile/post.scm= | post passes (=toc-pass=); re-exports =(uq sxml)=       |
+| =uq/sxml.scm=      | SXML element utilities for components and post passes      |
 | =uq/qr.scm=        | optional =,qr= component; needs Guile-QR-Code            |
 | =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
@@ -149,6 +150,11 @@ component modules must be loaded before a document is parsed.
   =(uq parse)= and, for helpers such as =plain=, =(uq tags)=.
 - =define-tag= exports the component from the
   module they appear in; do not add a separate export.
+- Components compose by calling each other as procedures.  Helpers for
+  that are functional: =(uq sxml)= for elements (shared with post passes,
+  which get it re-exported from =(uq compile post)=), and =set-attribute=
+  / =remove-attributes= in =(uq parse)= for attribute lists.  Keep
+  =(uq sxml)= free of uq-specific knowledge: it is plain SXML.
 - =write-sxml #:indent= must never change rendering.  Only elements that
   are not phrasing or =pre=-like and whose children are all elements get
   line breaks; runs of phrasing siblings share a line.  Check changes by

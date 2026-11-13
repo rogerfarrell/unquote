@@ -17,7 +17,8 @@
 (define-module (uq parse)
   #:use-module (ice-9 match) #:use-module (ice-9 rdelim) #:use-module (ice-9 textual-ports) #:use-module (ice-9 regex)
   #:use-module (srfi srfi-1) #:use-module (srfi srfi-9)
-  #:export (define-tag attribute attribute-values attribute-list main-attribute current-command markup enable-markup-reader!
+  #:export (define-tag attribute attribute-values attribute-list set-attribute remove-attributes
+            main-attribute current-command markup enable-markup-reader!
             read-markup-document markup-string->exprs
             at-line strip-line-wrappers uq-error-message))
 
@@ -322,6 +323,15 @@ while evaluating, so it carries the line."
 (define* (attribute-list attrs #:optional (exclude '()))
   "The :key value pairs in ATTRS as SXML attributes, minus the keys in EXCLUDE."
   (filter (lambda (a) (and (pair? a) (not (memq (car a) exclude)))) attrs))
+
+;; For passing attributes on to another component, changed.
+(define (set-attribute attrs key value)
+  "ATTRS with :KEY set to VALUE, replacing any :KEY already there."
+  (append (remove-attributes attrs (list key)) (list (list key value))))
+
+(define (remove-attributes attrs keys)
+  "ATTRS without the :key pairs for KEYS; plain words are kept."
+  (remove (lambda (a) (and (pair? a) (memq (car a) keys))) attrs))
 
 ;;; ================= Brackets =================
 ;; Index of the "]" matching the "[" at OPEN, or #f.  A ,(expr) escape
