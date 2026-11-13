@@ -410,6 +410,18 @@ them, outermost level first:
 (compile-uq "book.uq" #:tags '((book tags)) #:post (list (toc-pass '(h1 h2))))
 #+end_src
 
+Instead of a list of tags, =toc-pass= takes a procedure, called on each
+element: =#f= leaves it out, a number lists it at that level (lower is
+outer), and =#t= lists it at level 0.  A list of tags is shorthand for
+one.  To list chapters and key points by class:
+
+#+begin_src scheme
+(toc-pass (lambda (el)
+            (cond ((has-class? el "chapter") 0)
+                  ((has-class? el "key") 1)
+                  (else #f))))
+#+end_src
+
 - A heading without an =id= gets one from its text (=dry-goods=), made
   unique (=ingredients-2=) and different from ids already in the document.
 - Link text is the heading's text without markup.

@@ -61,7 +61,7 @@
 
 (define (has-class? el class)
   (and=> (element-attribute el 'class)
-         (lambda (c) (member class (string-tokenize c)) #t)))
+         (lambda (c) (and (member class (string-tokenize c)) #t))))
 
 (define (element-text x)
   "The text in X (a node or list of nodes), without markup."
@@ -108,17 +108,36 @@ inside elements for which SKIP? is true."
 ;;; the document's h1 and h2 elements, h2s nested under the h1 before them,
 ;;; giving each heading an id from its text if it has none.  Headings inside
 ;;; a toc are not listed.  A document without a toc is left as it is.
+;;;
+;;; Instead of a list of tags, toc-pass takes a procedure, called on each
+;;; element: #f leaves it out; a number lists it at that level (lower is
+;;; outer); #t lists it at level 0.  A list of tags is shorthand for one:
+;;;   (toc-pass (lambda (el) (and (has-class? el "chapter") 0)))
 
 (define (toc? el) (and (eq? (element-tag el) 'nav) (has-class? el "toc")))
 
 (define (toc-pass levels)
-  "A post pass listing the elements whose tags are in LEVELS, outermost
-level first, in every ,toc of the document."
+  "A post pass filling every ,toc of the document.  LEVELS is a list of
+tags, outermost level first, or a procedure from an element to #f (leave
+it out), a level number (lower is outer) or #t (level 0)."
+  (define level-of
+    (match levels
+      ((? procedure? proc)
+       (lambda (el)
+         (match (proc el)
+           (#f #f)
+           (#t 0)
+           ((? exact-integer? n) n)
+           (other (error (format #f "toc-pass: the procedure returned ~s for <~a>; give #f, #t or a level number"
+                                 other (element-tag el)))))))
+      (((? symbol?) ...)
+       (lambda (el) (list-index (lambda (t) (eq? t (element-tag el))) levels)))
+      (_ (error "toc-pass: give a list of tags or a procedure" levels))))
   (lambda (doc)
-    (if (null? (find-elements toc? doc)) doc (fill-tocs doc levels))))
+    (if (null? (find-elements toc? doc)) doc (fill-tocs doc level-of))))
 
-(define (fill-tocs doc levels)
-    (define (heading? el) (memq (element-tag el) levels))
+(define (fill-tocs doc level-of)
+    (define (heading? el) (level-of el))
     (define taken                          ; ids already in the document
       (filter-map (lambda (el) (element-attribute el 'id)) (find-elements (const #t) doc)))
     (define (fresh-id text)
@@ -134,7 +153,7 @@ level first, in every ,toc of the document."
                           el))
                     doc #:skip? toc?))
     ;; 2. the entries, nested by level
-    (define (depth el) (list-index (lambda (t) (eq? t (element-tag el))) levels))
+    (define depth level-of)
     (define (items entries)
       (match entries
         (() '())

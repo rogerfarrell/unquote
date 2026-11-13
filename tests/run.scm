@@ -244,6 +244,35 @@
 (check "toc-pass: levels are the pass's own"
        (render-post ",toc\n\n,section One\n,subsection Two" (toc-pass '(h2)))
        "<nav class=\"toc\"><ol><li><a href=\"#two\">Two</a></li></ol></nav><h1>One</h1><h2 id=\"two\">Two</h2>")
+;; toc-pass with a procedure: #f skips, a number is the level, #t is level 0
+(define-tag block:inline (chapter . b) `(h1 (@ (class "chapter")) ,@b))
+(check "toc-pass: a predicate choosing elements and levels"
+       (render-post ",toc\n\n,chapter One\n,section Not listed\n,(quote (p (@ (class \"key\")) \"Key point\"))\n\n,chapter Two"
+                    (toc-pass (lambda (el) (cond ((has-class? el "chapter") 0)
+                                                 ((has-class? el "key") 1)
+                                                 (else #f)))))
+       (string-append
+        "<nav class=\"toc\"><ol><li><a href=\"#one\">One</a><ol><li><a href=\"#key-point\">Key point</a></li></ol></li>"
+        "<li><a href=\"#two\">Two</a></li></ol></nav>"
+        "<h1 class=\"chapter\" id=\"one\">One</h1><h1>Not listed</h1><p><p class=\"key\" id=\"key-point\">Key point</p></p>"
+        "<h1 class=\"chapter\" id=\"two\">Two</h1>"))
+(check "toc-pass: #t lists flat"
+       (render-post ",toc\n\n,section A\n,subsection B" (toc-pass (lambda (el) (and (memq (element-tag el) '(h1 h2)) #t))))
+       (string-append "<nav class=\"toc\"><ol><li><a href=\"#a\">A</a></li><li><a href=\"#b\">B</a></li></ol></nav>"
+                      "<h1 id=\"a\">A</h1><h2 id=\"b\">B</h2>"))
+(check "has-class?"
+       (map (lambda (el) (has-class? el "toc"))
+            '((nav (@ (class "toc"))) (nav (@ (class "main toc wide"))) (nav (@ (class "menu"))) (nav) (nav (@ (class "tocx")))))
+       '(#t #t #f #f #f))
+(check "toc-pass: a nav with another class is not a toc"
+       (render-post ",(quote (nav (@ (class \"menu\")) (ol)))\n\n,toc\n\n,section A" toc2)
+       (string-append "<p><nav class=\"menu\"><ol></ol></nav></p><nav class=\"toc\"><ol><li><a href=\"#a\">A</a></li></ol></nav>"
+                      "<h1 id=\"a\">A</h1>"))
+(check "toc-pass: a bad return value is an error"
+       (catch #t (lambda () (render-post ",toc\n\n,section A" (toc-pass (lambda (el) "x"))) #f)
+         (lambda (k . a) (uq-error-message k a)))
+       "toc-pass: the procedure returned \"x\" for <h1>; give #f, #t or a level number")
+
 (check "slugify" (map slugify '("Dry goods" "Crème brûlée!" "  " "3 Steps")) '("dry-goods" "crème-brûlée" "section" "3-steps"))
 
 ;;; Quoted attribute values
