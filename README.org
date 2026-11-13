@@ -301,25 +301,35 @@ Scan ,qr[https://example.com/recipes/cheeseburger-helper][the recipe online].
 
 *** Colours, including CMYK
 
-The modules are a =path= with class =qr-dark= and the background a =rect=
-with class =qr-light=, black on white by default.  How to recolour them
-depends on the renderer:
+=,qr= draws black on white in RGB; =,qr-cmyk= draws the same code in
+=device-cmyk(0 0 0 1)= on =device-cmyk(0 0 0 0)=, which WeasyPrint writes
+to the PDF as =/DeviceCMYK=.  Browsers do not support =device-cmyk()= and
+show =,qr-cmyk= as plain black on white.
 
-- *In a browser*, page CSS works: =.qr-dark { fill: #123 }=.
-- *In WeasyPrint*, page CSS does not reach inside inline SVG -- but CSS
-  /inside/ the SVG does, =device-cmyk()= included.  Set =qr-css= in the
-  build script and it is placed in a =<style>= in every QR code:
+For other colours, a project defines its own component with
+=qr-element=; naming it =qr= replaces the default for that project, so
+editors keep writing =,qr=:
 
-  #+begin_src scheme
-  (use-modules (uq compile) (uq qr))
+#+begin_src scheme
+(define-module (brand tags) #:use-module (uq parse) #:use-module (uq qr))
 
-  (parameterize ((qr-css ".qr-dark  { fill: device-cmyk(0 0 0 1) }
-                          .qr-light { fill: device-cmyk(0 0 0 0) }"))
-    (compile-uq "recipe.uq" #:tags '((uq qr))))
-  #+end_src
+(define-tag inline (qr . label) #:required-attributes attrs
+  (qr-element attrs label #:dark "device-cmyk(1 0.6 0 0.2)"))
+#+end_src
 
-  The PDF then draws the code in =/DeviceCMYK=.  Browsers do not support
-  =device-cmyk()= and fall back to black and white.
+The colours go in =style= attributes on the code's own =path= (class
+=qr-dark=) and =rect= (class =qr-light=), over =fill= attributes of black
+and white:
+
+- WeasyPrint honours them, CMYK included.  Page CSS does not reach inside
+  inline SVG in WeasyPrint, so this is how to colour a code for print.
+- They apply to that code only; a =<style>= inside one SVG would restyle
+  every code on the page.
+- A colour the renderer does not support falls back to black or white.
+- Keep the contrast high: scanners are less forgiving of coloured codes.
+
+In a browser, an uncoloured =,qr= can also be restyled by page CSS:
+=.qr-dark { fill: #123 }=.
 
 * Build scripts
 

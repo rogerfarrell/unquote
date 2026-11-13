@@ -428,13 +428,24 @@
                     (string-contains (svg ",qr[0123456789]") "<path class=\"qr-dark\" d=\"")
                     #t)
                #t)
-        (check "qr: no <style> unless qr-css is set" (string-contains (svg ",qr[0123456789]") "<style>") #f)
-        (check "qr: qr-css goes in a <style> inside the svg"
-               (and (string-contains
-                     (parameterize ((qr-css ".qr-dark { fill: device-cmyk(0 0 0 1) }")) (svg ",qr[0123456789]"))
-                     "shape-rendering=\"crispEdges\"><style>.qr-dark { fill: device-cmyk(0 0 0 1) }</style><rect")
+        (check "qr: no <style> and no colour styles"
+               (or (string-contains (svg ",qr[0123456789]") "<style")
+                   (string-contains (svg ",qr[0123456789]") "style=\""))
+               #f)
+        (check "qr-cmyk: CMYK style attributes over the black and white fills"
+               (and (string-contains (svg ",qr-cmyk[0123456789]")
+                                     "<rect class=\"qr-light\" width=\"100%\" height=\"100%\" fill=\"#fff\" style=\"fill: device-cmyk(0 0 0 0)\"></rect>")
+                    (string-contains (svg ",qr-cmyk[0123456789]")
+                                     "fill=\"#000\" style=\"fill: device-cmyk(0 0 0 1)\"></path>")
                     #t)
                #t)
+        (check "qr-cmyk: same code as qr"
+               (and (string-contains (svg ",qr-cmyk[0123456789]")
+                                (let* ((s (svg ",qr[0123456789]")) (i (string-contains s " d=\"")))
+                                  (substring s i (string-index s #\" (+ i 4)))))
+                    #t)
+               #t)
+        (fails "a ,qr-cmyk[x :ecc best]" "line 1: ,qr-cmyk: :ecc is low, medium, quartile or high, not best")
         (check "qr: the data is the label when there is none"
                (and (string-contains (svg ",qr[0123456789]") "aria-label=\"0123456789\"") #t) #t)
         (check "qr: :ecc changes the code"
