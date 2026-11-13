@@ -125,6 +125,10 @@ component modules must be loaded before a document is parsed.
 - Parse errors are raised with =oops= and start with ="line N: "=.  Report
   the line where the problem starts (where a bracket opened, not where the
   run started).
+- Open every file with an explicit encoding (=#:encoding "UTF-8"= or
+  =set-port-encoding!=).  Guile's default comes from the locale, which is
+  ASCII under C/POSIX; =.uq= files and output are always UTF-8.  The
+  tests include a non-ASCII round trip, so run them under =LC_ALL=C= too.
 - Error messages are ASCII only: Guile's error port may print other
   characters as =?=.
 - Do not name a module =(unquote …)=.  =define-module= quasiquotes its

@@ -246,6 +246,18 @@
        (map strip-line-wrappers (markup-string->exprs "a ,em[b] ,(+ 1 2)"))
        '((p "a " (em "b") " " (+ 1 2))))
 
+;;; .uq files are UTF-8 whatever the locale (the tests may run under C)
+(let* ((dir  (string-append (or (getenv "TMPDIR") "/tmp") "/uq-utf8-" (number->string (getpid))))
+       (in   (string-append dir "/enc.uq"))
+       (out  (string-append dir "/enc.html")))
+  (mkdir dir)
+  (call-with-output-file in (lambda (p) (display "Penzey\u2019s cr\u00e8me\n" p)) #:encoding "UTF-8")
+  (with-output-to-string (lambda () (compile-uq in)))
+  (check "compile-uq reads .uq files as UTF-8"
+         (call-with-input-file out get-string-all #:encoding "UTF-8")
+         "<p>Penzey\u2019s cr\u00e8me</p>\n")
+  (delete-file in) (delete-file out) (rmdir dir))
+
 ;;; Markup embedded in a Scheme file reports that file and its lines
 (let* ((dir  (string-append (or (getenv "TMPDIR") "/tmp") "/uq-embed-" (number->string (getpid))))
        (file (string-append dir "/embedded.scm"))

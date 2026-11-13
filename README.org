@@ -29,6 +29,8 @@ Scheme.
 
 GNU Guile 3.0 or later.  No other dependencies.
 
+=.uq= files are UTF-8, whatever the system locale; output is UTF-8 too.
+
 * Usage
 
 Render a document.  =--tags= adds a component module to the generic

@@ -51,13 +51,13 @@ a project may redefine a generic component such as em."
 (define* (uq-file->expr file #:key (tags '()))
   "The Scheme expression FILE reads as.  Loads TAGS first."
   (component-module tags)
-  (call-with-input-file file read-markup-document))
+  (call-with-input-file file read-markup-document #:encoding "UTF-8"))
 
 (define* (uq-file->sxml file #:key (tags '()))
   "FILE parsed and evaluated: its top-level nodes, as a list of SXML
 siblings with no root element.  Errors are raised."
   (let ((env (component-module tags)))
-    (eval (call-with-input-file file read-markup-document) env)))
+    (eval (call-with-input-file file read-markup-document #:encoding "UTF-8") env)))
 
 ;;; Helpers for #:page procedures
 
