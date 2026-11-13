@@ -55,10 +55,8 @@
                             (iota n)))))
     `(svg (@ (xmlns "http://www.w3.org/2000/svg")
              (viewBox ,(string-append "0 0 " side " " side))
-             ;; No shape-rendering="crispEdges": renderers may snap each
-             ;; module's edges separately, which at a non-integer scale
-             ;; leaves one-pixel notches where modules meet diagonally.
-             (class "qr") (role "img") (aria-label ,label))
+             (class "qr") (role "img") (aria-label ,label)
+             (shape-rendering "crispEdges"))
           (rect (@ (width "100%") (height "100%") (fill "#fff")))
           (path (@ (d ,d) (fill "#000"))))))
 

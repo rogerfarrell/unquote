@@ -423,8 +423,6 @@
                                      "<p>Scan <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 33 33\" class=\"qr\" role=\"img\" aria-label=\"the recipe\"")
                     #t)
                #t)
-        (check "qr: no crispEdges (it notches diagonal corners when scaled)"
-               (string-contains (svg ",qr[0123456789]") "crispEdges") #f)
         (check "qr: the data is the label when there is none"
                (and (string-contains (svg ",qr[0123456789]") "aria-label=\"0123456789\"") #t) #t)
         (check "qr: :ecc changes the code"
