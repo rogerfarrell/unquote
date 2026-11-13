@@ -20,7 +20,7 @@
 ;;; nodes.  Passes are ordinary procedures; nothing here is registered, and
 ;;; nothing is left in the document to instruct them.
 ;;;
-;;;   (compile-uq "book.uq" #:post (list (toc-pass '(h2 h3))))
+;;;   (compile-uq "book.uq" #:post (list (toc-pass '(h1 h2))))
 
 (define-module (uq compile post)
   #:use-module (ice-9 match)
@@ -104,8 +104,8 @@ inside elements for which SKIP? is true."
 
 ;;; ---------------- Table of contents ----------------
 ;;; ,toc (in (uq tags)) renders <nav class="toc"> with an optional title and
-;;; an empty <ol>.  (toc-pass '(h2 h3)) fills every such <ol> with links to
-;;; the document's h2 and h3 elements, h3s nested under the h2 before them,
+;;; an empty <ol>.  (toc-pass '(h1 h2)) fills every such <ol> with links to
+;;; the document's h1 and h2 elements, h2s nested under the h1 before them,
 ;;; giving each heading an id from its text if it has none.  Headings inside
 ;;; a toc are not listed.  A document without a toc is left as it is.
 

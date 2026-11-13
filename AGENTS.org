@@ -160,7 +160,7 @@ component modules must be loaded before a document is parsed.
 - Work that needs the whole document is a post pass in =(uq compile post)=:
   a procedure from document to document, passed explicitly to
   =compile-uq='s =#:post=.  Passes take their configuration as arguments
-  (=(toc-pass '(h2 h3))=); never write instructions for a pass into the
+  (=(toc-pass '(h1 h2))=); never write instructions for a pass into the
   SXML, and never register passes.  Components stay lexical: they see only
   their own contents.
 - Components return SXML.  =sxml->xml= writes empty elements as =<x />=,

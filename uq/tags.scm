@@ -46,7 +46,7 @@
 ;;; pass fills it -- see toc-pass in (uq compile post).
 (define-tag block:inline (toc . title)
   `(nav (@ (class "toc"))
-        ,@(if (null? title) '() `((h2 (@ (class "toc-title")) ,@title)))
+        ,@(if (null? title) '() `((h1 (@ (class "toc-title")) ,@title)))
         (ol)))
 
 ;;; tables by column: ,columns holds ,column blocks, each written like a

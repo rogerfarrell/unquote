@@ -400,14 +400,14 @@ document (a list of SXML nodes) to a document, given to =compile-uq= as
 nothing is written into the document to instruct them.
 
 =(uq compile post)= provides =toc-pass= and the utilities passes are made
-of.  =(toc-pass '(h2 h3))= fills every =,toc= with links to the
-document's =h2= and =h3= elements, =h3=s nested under the =h2= before
+of.  =(toc-pass '(h1 h2))= fills every =,toc= with links to the
+document's =h1= and =h2= elements, =h2=s nested under the =h1= before
 them, outermost level first:
 
 #+begin_src scheme
 (use-modules (uq compile) (uq compile post))
 
-(compile-uq "book.uq" #:tags '((book tags)) #:post (list (toc-pass '(h2 h3))))
+(compile-uq "book.uq" #:tags '((book tags)) #:post (list (toc-pass '(h1 h2))))
 #+end_src
 
 - A heading without an =id= gets one from its text (=dry-goods=), made
