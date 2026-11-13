@@ -106,8 +106,10 @@ inside elements for which SKIP? is true."
 ;;; ,toc (in (uq tags)) renders <nav class="toc"> with an optional title and
 ;;; an empty <ol>.  (toc-pass '(h1 h2)) fills every such <ol> with links to
 ;;; the document's h1 and h2 elements, h2s nested under the h1 before them,
-;;; giving each heading an id from its text if it has none.  Headings inside
-;;; a toc are not listed.  A document without a toc is left as it is.
+;;; giving each heading an id from its text if it has none.  An entry's text
+;;; is the heading's data-toc attribute, if it has one, or else its text.
+;;; Headings inside a toc are not listed.  A document without a toc is left
+;;; as it is.
 ;;;
 ;;; Instead of a list of tags, toc-pass takes a procedure, called on each
 ;;; element in document order: #f leaves it out; a number lists it at that
@@ -183,7 +185,7 @@ is the entries accepted so far, most recent first, each (level . element)."
       (((level . el) . rest)
        (let-values (((kids rest) (span (lambda (x) (> (car x) level)) rest)))
          (cons `(li (a (@ (href ,(string-append "#" (element-attribute el 'id))))
-                       ,(string-trim-both (element-text el)))
+                       ,(string-trim-both (or (element-attribute el 'data-toc) (element-text el))))
                     ,@(if (null? kids) '() `((ol ,@(items kids)))))
                (items rest))))))
   (define listed (items entries))

@@ -445,9 +445,29 @@ once every choice is made.
 
 - A heading without an =id= gets one from its text (=dry-goods=), made
   unique (=ingredients-2=) and different from ids already in the document.
-- Link text is the heading's text without markup.
+- Link text is the heading's =data-toc= attribute if it has one (below),
+  and otherwise its text without markup.
 - Headings inside a toc, such as its own title, are not listed.
 - Every =,toc= is filled.  A document without one is left as it is.
+
+** Short names in the table of contents
+A heading can have a shorter name in the table of contents than on the
+page: =toc-pass= uses its =data-toc= attribute when it has one.  =data-*=
+attributes are HTML's place for data of one's own; browsers ignore them.
+A component sets it, here from a =:toc= the editor gives:
+
+#+begin_src scheme
+(define-tag block:inline (chapter . title) #:attributes attrs
+  (let ((short (attribute attrs 'toc)))
+    `(h1 ,@(if short `((@ (data-toc ,short))) '())
+         ,@title)))
+#+end_src
+
+#+begin_example
+,chapter[:toc Prep][Preparing the dough the night before]
+#+end_example
+
+The heading's generated =id= still comes from its full text.
 
 The utilities: =element?=, =element-tag=, =element-attributes=,
 =element-children=, =element-attribute=, =set-element-attribute=,

@@ -305,6 +305,17 @@
                     (toc-pass (lambda (el . rest) (and (eq? (element-tag el) 'h1) (null? (car rest)) 0))))
        "<nav class=\"toc\"><ol><li><a href=\"#a\">A</a></li></ol></nav><h1 id=\"a\">A</h1><h1>B</h1>")
 
+;; data-toc: a shorter entry text than the heading's
+(define-tag block:inline (chapter . b) #:attributes attrs
+  (let ((short (attribute attrs 'toc)))
+    `(h1 ,@(if short `((@ (data-toc ,short))) '()) ,@b)))
+(check "toc-pass: data-toc names the entry; the id still comes from the text"
+       (render-post ",toc\n\n,chapter[:toc Prep][Preparing the dough the night before]\n,chapter Baking" toc2)
+       (string-append "<nav class=\"toc\"><ol><li><a href=\"#preparing-the-dough-the-night-before\">Prep</a></li>"
+                      "<li><a href=\"#baking\">Baking</a></li></ol></nav>"
+                      "<h1 data-toc=\"Prep\" id=\"preparing-the-dough-the-night-before\">Preparing the dough the night before</h1>"
+                      "<h1 id=\"baking\">Baking</h1>"))
+
 (check "slugify" (map slugify '("Dry goods" "Crème brûlée!" "  " "3 Steps")) '("dry-goods" "crème-brûlée" "section" "3-steps"))
 
 ;;; Quoted attribute values

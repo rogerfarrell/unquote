@@ -162,7 +162,10 @@ component modules must be loaded before a document is parsed.
   =compile-uq='s =#:post=.  Passes take their configuration as arguments
   (=(toc-pass '(h1 h2))=); never write instructions for a pass into the
   SXML, and never register passes.  Components stay lexical: they see only
-  their own contents.
+  their own contents.  A toc entry's text comes from the element's
+  =data-toc= attribute, falling back to its text: plain HTML data, not an
+  instruction to the pass.  Do not inline CSS unless a particular component
+  calls for it.
 - Components return SXML.  =sxml->xml= writes empty elements as =<x />=,
   which browsers read as an open tag for non-void elements; =write-sxml=
   therefore closes empty non-void elements (=<td></td>=).  Write HTML
