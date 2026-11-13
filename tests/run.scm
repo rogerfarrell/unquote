@@ -196,6 +196,56 @@
    ((define-tag block (x . b) #:attributes a #:required-attributes c b)
     "only one of #:attributes and #:required-attributes")))
 
+;;; ,toc and (uq compile post)
+(use-modules (uq compile post))
+(define-tag block:inline (section . b) `(h2 ,@b))
+(define-tag block:inline (subsection . b) `(h3 ,@b))
+(define (render-post str . passes)
+  (with-output-to-string
+    (lambda ()
+      (write-sxml (fold (lambda (pass doc) (pass doc))
+                        (eval `(list ,@(markup-string->exprs str)) (current-module))
+                        passes)))))
+(define toc2 (toc-pass '(h2 h3)))
+(html ",toc Contents" "<nav class=\"toc\"><h2 class=\"toc-title\">Contents</h2><ol></ol></nav>")
+(html ",toc" "<nav class=\"toc\"><ol></ol></nav>")
+(check "toc-pass: nested entries, ids from text, duplicates made unique, own title skipped"
+       (render-post ",toc Contents\n\n,section Ingredients\n,subsection Dry goods\n,section Ingredients" toc2)
+       (string-append
+        "<nav class=\"toc\"><h2 class=\"toc-title\">Contents</h2><ol>"
+        "<li><a href=\"#ingredients\">Ingredients</a><ol><li><a href=\"#dry-goods\">Dry goods</a></li></ol></li>"
+        "<li><a href=\"#ingredients-2\">Ingredients</a></li></ol></nav>"
+        "<h2 id=\"ingredients\">Ingredients</h2><h3 id=\"dry-goods\">Dry goods</h3><h2 id=\"ingredients-2\">Ingredients</h2>"))
+(check "toc-pass: link text without markup; the heading keeps it"
+       (render-post ",toc\n\n,section Jar ,em[sizes]" toc2)
+       (string-append "<nav class=\"toc\"><ol><li><a href=\"#jar-sizes\">Jar sizes</a></li></ol></nav>"
+                      "<h2 id=\"jar-sizes\">Jar <em>sizes</em></h2>"))
+(check "toc-pass: a heading with an id keeps it"
+       (and (string-contains
+             (render-post ",toc\n\n,(quote (h2 (@ (id \"top\")) \"Start\"))" toc2)
+             "<li><a href=\"#top\">Start</a></li>") #t)
+       #t)
+(check "toc-pass: a new id avoids one already in the document"
+       (and (string-contains
+             (render-post ",toc\n\n,(quote (p (@ (id \"spices\")) \"x\"))\n\n,section Spices" toc2)
+             "<h2 id=\"spices-2\">Spices</h2>") #t)
+       #t)
+(check "toc-pass: levels not listed are ignored; a leading h3 stays at the top"
+       (render-post ",toc\n\n,subsection Early\n,section Main\n,(quote (h4 \"Deep\"))" toc2)
+       (string-append "<nav class=\"toc\"><ol><li><a href=\"#early\">Early</a></li><li><a href=\"#main\">Main</a></li></ol></nav>"
+                      "<h3 id=\"early\">Early</h3><h2 id=\"main\">Main</h2><p><h4>Deep</h4></p>"))
+(check "toc-pass: every toc is filled"
+       (length (find-elements (lambda (el) (eq? (element-tag el) 'li))
+                              (toc2 (eval `(list ,@(markup-string->exprs ",toc A\n\n,section One\n\n,toc B"))
+                                          (current-module)))))
+       2)
+(check "toc-pass: without a toc the document is unchanged"
+       (render-post ",section One" toc2) "<h2>One</h2>")
+(check "toc-pass: levels are the pass's own"
+       (render-post ",toc\n\n,section One\n,subsection Two" (toc-pass '(h3)))
+       "<nav class=\"toc\"><ol><li><a href=\"#two\">Two</a></li></ol></nav><h2>One</h2><h3 id=\"two\">Two</h3>")
+(check "slugify" (map slugify '("Dry goods" "Crème brûlée!" "  " "3 Steps")) '("dry-goods" "crème-brûlée" "section" "3-steps"))
+
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"
       "<p><a href=\"https://example.com\" title=\"Jar sizes for every recipe\">jars</a></p>")

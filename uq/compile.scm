@@ -201,9 +201,11 @@ written as a fragment.  INDENT is passed to write-sxml."
 (define (default-output in)
   (string-append (if (string-suffix? ".uq" in) (string-drop-right in 3) in) ".html"))
 
-(define* (compile-uq in #:key out (tags '()) (page #f) (indent #f))
+(define* (compile-uq in #:key out (tags '()) (post '()) (page #f) (indent #f))
   "Compile the .uq file IN to the HTML file OUT (default: IN with .html).
-The output is a fragment.  PAGE, if given, is a procedure from the
+The output is a fragment.  POST is a list of procedures from document to
+document, applied in order after evaluation (see (uq compile post)).
+PAGE, if given, is a procedure from the
 document's nodes (a list of siblings) to the SXML to write instead --
 splice them with ,@ -- and if the result is an html element,
 a doctype is added.  INDENT (#t, or a number of spaces) writes indented
@@ -213,7 +215,7 @@ the error port, write nothing, and return #f."
   (define target (or out (default-output in)))
   (catch #t
     (lambda ()
-      (let* ((doc  (uq-file->sxml in #:tags tags))
+      (let* ((doc  (fold (lambda (pass doc) (pass doc)) (uq-file->sxml in #:tags tags) post))
              (html (if page (page doc) doc)))              ; finish before opening OUT
         (call-with-output-file target (lambda (port) (write-html html port #:indent indent)))
         (format #t "~a -> ~a~%" in target)

@@ -134,6 +134,15 @@ its cells.  Short columns are padded with empty cells.
     ,frac[1/2] tsp
 #+end_example
 
+** Table of contents
+=,toc= marks where a table of contents goes; the text after it is its
+title.  The build script decides which headings it lists (see
+[[*Post-processing][Post-processing]]).
+
+#+begin_example
+,toc Contents
+#+end_example
+
 ** Inline commands
 - =,em[some words]= covers exactly the bracketed text.  Brackets nest and may
   span lines; balanced brackets inside are plain text.
@@ -176,8 +185,8 @@ component definitions.  =:name value= is there for the occasional case.
 * Defining components
 
 =(uq tags)= provides the generic components: =p=, =ul=, =ol=, =li=,
-=table=, =tr=, =td=, =th=, =columns=, =column=, =em=, =strong=, =link=,
-=image= and =frac=.  Anything specific to a
+=table=, =tr=, =td=, =th=, =columns=, =column=, =toc=, =em=, =strong=,
+=link=, =image= and =frac=.  Anything specific to a
 kind of page goes in a module of its own; =examples/recipe/tags.scm=
 defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
 =ingredients=, =directions= and =tip=.
@@ -380,6 +389,39 @@ Lower-level pieces are exported too: =uq-file->expr=, =uq-file->sxml=,
 =component-module=, =page-title=, =write-html= and =write-sxml=
 (=sxml->xml= with an optional =#:indent=).
 =examples/recipe/build.scm= is a complete script.
+
+* Post-processing
+
+Some work needs the whole document: a table of contents lists headings
+that come after it.  Components only see their own contents, so this is
+done after evaluation, by /post passes/ -- ordinary procedures from a
+document (a list of SXML nodes) to a document, given to =compile-uq= as
+=#:post= and applied in order before =#:page=.  Nothing is registered and
+nothing is written into the document to instruct them.
+
+=(uq compile post)= provides =toc-pass= and the utilities passes are made
+of.  =(toc-pass '(h2 h3))= fills every =,toc= with links to the
+document's =h2= and =h3= elements, =h3=s nested under the =h2= before
+them, outermost level first:
+
+#+begin_src scheme
+(use-modules (uq compile) (uq compile post))
+
+(compile-uq "book.uq" #:tags '((book tags)) #:post (list (toc-pass '(h2 h3))))
+#+end_src
+
+- A heading without an =id= gets one from its text (=dry-goods=), made
+  unique (=ingredients-2=) and different from ids already in the document.
+- Link text is the heading's text without markup.
+- Headings inside a toc, such as its own title, are not listed.
+- Every =,toc= is filled.  A document without one is left as it is.
+
+The utilities: =element?=, =element-tag=, =element-attributes=,
+=element-children=, =element-attribute=, =set-element-attribute=,
+=has-class?=, =element-text=, =map-elements= (rewrite elements, outermost
+first, with an optional =#:skip?=), =find-elements= (collect elements in
+document order) and =slugify=.  Passes are plain functions, so they also
+apply to the output of the =markup= macro.
 
 * Scheme expressions in a document
 

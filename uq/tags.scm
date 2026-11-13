@@ -42,6 +42,13 @@
 (define-tag block (td . body) #:wrap #f `(td ,@body))
 (define-tag block (th . body) #:wrap #f `(th ,@body))
 
+;;; a table of contents: ,toc Contents.  It renders an empty list; a post
+;;; pass fills it -- see toc-pass in (uq compile post).
+(define-tag block:inline (toc . title)
+  `(nav (@ (class "toc"))
+        ,@(if (null? title) '() `((h2 (@ (class "toc-title")) ,@title)))
+        (ol)))
+
 ;;; tables by column: ,columns holds ,column blocks, each written like a
 ;;; ,tr turned sideways, and pivots them into rows.  Short columns are
 ;;; padded with empty cells.  A ,column returns a (column cell …) node that

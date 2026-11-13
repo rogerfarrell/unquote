@@ -23,6 +23,7 @@ Prefer moving complexity into components or the parser.
 | =uq/parse.scm=     | reader, parser, registry, =define-tag=, =markup= macro     |
 | =uq/tags.scm=      | generic components: structure, lists, inline markup        |
 | =uq/compile.scm=   | =compile-uq= and helpers: .uq file -> HTML, for build scripts |
+| =uq/compile/post.scm= | post passes (=toc-pass=) and SXML utilities for them   |
 | =uq/qr.scm=        | optional =,qr= component; needs Guile-QR-Code            |
 | =unquote.scm=      | command-line renderer (=--tags= adds component modules)    |
 | =tests/run.scm=    | regression tests: markup -> expected HTML or error         |
@@ -156,6 +157,12 @@ component modules must be loaded before a document is parsed.
   furniture (head, stylesheets, language): those belong in the build
   script's =#:page= procedure.  =write-html= adds a doctype only when the
   root is =html=.
+- Work that needs the whole document is a post pass in =(uq compile post)=:
+  a procedure from document to document, passed explicitly to
+  =compile-uq='s =#:post=.  Passes take their configuration as arguments
+  (=(toc-pass '(h2 h3))=); never write instructions for a pass into the
+  SXML, and never register passes.  Components stay lexical: they see only
+  their own contents.
 - Components return SXML.  =sxml->xml= writes empty elements as =<x />=,
   which browsers read as an open tag for non-void elements; =write-sxml=
   therefore closes empty non-void elements (=<td></td>=).  Write HTML
