@@ -24,8 +24,9 @@
 ;;;
 ;;; DATA is any text: a URL, a "WIFI:…" or vCard string (quote it if it has
 ;;; spaces or brackets; \n for line breaks), digits.  The label is the
-;;; accessible name; without one, DATA is used.  :ecc is the error
-;;; correction level -- low (the default), medium, quartile or high.
+;;; accessible name; without one, DATA is used.  :ecc is the minimum error
+;;; correction level -- low (the default), medium, quartile or high; the
+;;; library raises it when that costs no extra size.
 ;;; The result is an inline SVG with class "qr"; size it with CSS.
 ;;;
 ;;; Colours.  The modules are a path with class "qr-dark", the background a

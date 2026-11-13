@@ -292,8 +292,12 @@ Scan ,qr[https://example.com/recipes/cheeseburger-helper][the recipe online].
 - The data is the first word in the attribute bracket, or =:data=: any text -- a URL,
   digits, a =WIFI:= or =mailto:= string, a vCard.  Quote it if it has
   spaces or brackets, and write line breaks as =\n= inside the quotes.
-- =:ecc= sets the error correction: =low= (the default), =medium=,
-  =quartile= or =high=.
+- =:ecc= is the /minimum/ error correction: =low= (the default),
+  =medium=, =quartile= or =high=.  The code is made at the smallest size
+  that fits the data at that level, and Guile-QR-Code then raises the level
+  as far as that size allows -- so a short code asked for at =low= often
+  comes out at =high=.  A higher =:ecc= can make the code larger, never
+  smaller.
 - The text bracket is the accessible name (=aria-label=); without one,
   the data is used.
 - The result is an inline =<svg class="qr">= with a quiet zone, scaled
