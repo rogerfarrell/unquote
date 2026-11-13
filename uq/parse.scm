@@ -23,8 +23,9 @@
             at-line strip-line-wrappers uq-error-message))
 
 ;;; ================= Component registry =================
-;; name -> (kind attributes wrap), attributes being what editors may write:
-;; #f, optional or required (from #:editor-attributes)
+;; name -> (kind attributes wrap), attributes being what editors may write
+;; (from #:editor-attributes): #f, optional, or the list of required
+;; attribute names, the first of which may be written as a plain word
 ;; Kinds are  placement:content.
 ;;   block:block   (alias block)   starts a line; holds blank-line-separated groups,
 ;;                                 each wrapped per the tag's #:wrap, else the
@@ -45,8 +46,8 @@
 (define registry (make-hash-table))
 (define (entry name)    (hash-ref registry name))
 (define (kind-of name)  (and=> (entry name) car))
-(define (attributes? name) (and=> (entry name) cadr))   ; optional or required
-(define (attributes-required? name) (eq? (attributes? name) 'required))
+(define (attributes? name) (and=> (entry name) cadr))   ; optional or a list
+(define (attributes-required? name) (pair? (attributes? name)))
 ;; The wrapper for loose text where a block:block has no #:wrap of its own,
 ;; and at the top level of a document.  Declared by a tag with
 ;; #:default-wrap #t -- (uq tags) declares p -- the latest declaration
@@ -98,15 +99,17 @@
 ;;                              without it, the component takes none
 ;;   #:editor-attributes #t     editors may write [attributes][text]; the
 ;;                              brackets can be left out, giving none (default)
-;;   #:editor-attributes required  the attribute bracket must be there and
-;;                              not empty; the parser says so, with a line
+;;   #:editor-attributes (key …)  these attributes are required, and the
+;;                              first may be written as a plain word; the
+;;                              parser checks, with a line, and gives the
+;;                              component (key "value") either way
 ;;   #:editor-attributes #f     only Scheme callers pass attributes; for
 ;;                              editors a bracket is the text, as without
 ;;                              #:attributes
 ;; Every component is called as (name attrs . body), BODY being the text --
 ;; or, for a block, its contents.  Without #:attributes, ATTRS must be '().
 ;; For example:
-;;   (define-tag inline (link . body) #:attributes attrs #:editor-attributes required
+;;   (define-tag inline (link . body) #:attributes attrs #:editor-attributes (href)
 ;;     (let ((href (main-attribute attrs 'href)))
 ;;       `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
@@ -133,8 +136,10 @@
                     (loop #'more wrap #'value editor default))
                    ((#:editor-attributes)
                     (unless (eqv? editor 0) (fail "~a given twice" #'kw key))
-                    (unless (memq (syntax->datum #'value) '(#t #f required))
-                      (fail "~a takes #t, #f or required" #'value key))
+                    (unless (match (syntax->datum #'value)
+                              ((or #t #f ((? symbol?) ..1)) #t)
+                              (_ #f))
+                      (fail "~a takes #t, #f or a list of attribute names" #'value key))
                     (loop #'more wrap attrs (syntax->datum #'value) default))
                    ((#:default-wrap)
                     (when default (fail "~a given twice" #'kw key))
@@ -146,7 +151,7 @@
             (begin
               (when (and (not attrs) (not (eqv? editor 0)))
                 (fail "#:editor-attributes needs #:attributes" #'name))
-              ;; what the parser lets editors write: #f, optional or required
+              ;; what the parser lets editors write: #f, optional or a list
               (let ((mode (cond ((not attrs) #f)
                                 ((eqv? editor 0) 'optional)
                                 ((eq? editor #t) 'optional)
@@ -421,12 +426,29 @@ while evaluating, so it carries the line."
        (else (values "" (checked-attributes first name line) next))))))   ; text is optional
 
 (define (missing-attributes name line)
-  (oops line ",~a needs attributes: ,~a[attributes][text]" name name))
+  (required-attributes '() name line))
+
+;; Check ATTRS against NAME's required attributes, if it has any, and give
+;; the first required one as a pair even when written as a plain word.
+(define (required-attributes attrs name line)
+  (match (attributes? name)
+    (((? symbol? main) . others)
+     (let ((words (filter string? attrs))
+           (keyed (filter pair? attrs)))
+       (cond ((and (assq main keyed) (pair? words))
+              (oops line ",~a: give the ~a once, as a word or as :~a" name main main))
+             ((> (length words) 1)
+              (oops line ",~a takes one ~a; quote it if it has spaces" name main))
+             ((and (null? words) (not (assq main keyed)))
+              (oops line ",~a needs its ~a: as the first word or as :~a" name main main)))
+       (for-each (lambda (key)
+                   (unless (assq key keyed) (oops line ",~a needs :~a" name key)))
+                 others)
+       (map (lambda (a) (if (string? a) (list main a) a)) attrs)))
+    (_ attrs)))
 
 (define (checked-attributes str name line)
-  (let ((attrs (parse-attributes str name line)))
-    (when (and (null? attrs) (attributes-required? name)) (missing-attributes name line))
-    attrs))
+  (required-attributes (parse-attributes str name line) name line))
 
 ;;; ================= Inline text -> parts =================
 ;; S is a whole paragraph or item: its lines joined with "\n".  LINE is the

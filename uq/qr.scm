@@ -41,7 +41,7 @@
 ;;; Uncoloured codes (,qr) can still be restyled by page CSS in a browser.
 ;;; For other colours, define a component with qr-element:
 ;;;
-;;;   (define-tag inline (qr . label) #:attributes attrs #:editor-attributes required
+;;;   (define-tag inline (qr . label) #:attributes attrs #:editor-attributes (data)
 ;;;     (qr-element attrs label #:dark "device-cmyk(1 0.6 0 0.2)"))
 
 (define-module (uq qr)
@@ -91,8 +91,8 @@ word or :data), :ecc, and the label, with optional DARK and LIGHT colours."
                                   (current-command) name)))))
     (qr-svg data ecc (if (null? label) data (plain label)) #:dark dark #:light light)))
 
-(define-tag inline (qr . label) #:attributes attrs #:editor-attributes required
+(define-tag inline (qr . label) #:attributes attrs #:editor-attributes (data)
   (qr-element attrs label))
 
-(define-tag inline (qr-cmyk . label) #:attributes attrs #:editor-attributes required
+(define-tag inline (qr-cmyk . label) #:attributes attrs #:editor-attributes (data)
   (qr-element attrs label #:dark "device-cmyk(0 0 0 1)" #:light "device-cmyk(0 0 0 0)"))

@@ -209,7 +209,7 @@ one declared without =#:attributes= takes ='()=.
 (define-tag block        (ul . body) #:wrap li `(ul ,@body))
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
-(define-tag inline       (link . body) #:attributes attrs #:editor-attributes required
+(define-tag inline       (link . body) #:attributes attrs #:editor-attributes (href)
   (let ((href (main-attribute attrs 'href)))         ; :href or the one plain word
     `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
@@ -221,13 +221,19 @@ one declared without =#:attributes= takes ='()=.
 | =#:editor-attributes= | editors write                                                  |
 |-----------------------+----------------------------------------------------------------|
 | =#t= (the default)    | =,name[attributes][text]=, or no brackets for none             |
-| =required=            | the attribute bracket, not empty                               |
+| =(name …)=            | these attributes, the first as a plain word or by key          |
 | =#f=                  | no attributes: a bracket is the text, as for =,em[…]=           |
 
-With =required=, the parser reports =line N: ,link needs attributes: …=
-when the bracket is missing or empty.  It cannot know /which/ attribute is
-needed, so a component that needs a particular one checks for it, usually
-with =main-attribute=.  With =#f=, only Scheme callers pass attributes: a
+A list names the attributes editors must give.  The first may be written
+as a plain word, =,link[https://example.com][jars]=, or by key,
+=,link[:href https://example.com][jars]=; the others need their key.  The
+parser checks them and reports problems with the line:
+=line N: ,link needs its href: as the first word or as :href=, =,link
+takes one href; quote it if it has spaces=, and, for a component declared
+with =(src alt)=, =,figure needs :alt=.  Either way
+the component receives the first one as a pair, =(href "https://…")=, so
+=(attribute attrs 'href)= finds it.  With a list, a plain word can only be
+that first attribute.  With =#f=, only Scheme callers pass attributes: a
 component other components build on, but that editors use plainly.  A
 component without =#:attributes= raises an error if a caller passes any.
 
@@ -237,10 +243,11 @@ and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 =body= is the text.  Helpers from =(uq parse)=:
 
 - =(main-attribute attrs 'name)= — a command's main value, given as
-  =:name= or as the one plain word.  Missing, given both ways, or given as
-  several plain words is an error naming the command, with its line:
-  =,link takes one href; quote it if it has spaces=.  =link=, =image=,
-  =photo= and =qr= use it.
+  =:name= or as the one plain word, with the same errors as the parser's
+  check, raised while evaluating.  For attributes that did not pass that
+  check: from other components, or from editors with =#:editor-attributes
+  #t=.  =link=, =image=, =photo= and =qr= use it, so Scheme callers may
+  pass the main value either way.
 - =(current-command)= — the command being evaluated, as the editor wrote
   it, for a component's own messages.  =main-attribute= uses it by default
   (an explicit third argument overrides it).  A component that calls
@@ -265,7 +272,7 @@ post-processing.  A link that opens in a new tab and is marked external:
 #+begin_src scheme
 (use-modules (uq parse) (uq tags) (uq sxml))
 
-(define-tag inline (offsite . body) #:attributes attrs #:editor-attributes required
+(define-tag inline (offsite . body) #:attributes attrs #:editor-attributes (href)
   (add-class (apply link (set-attribute attrs 'target "_blank") body) "external"))
 #+end_src
 
@@ -374,7 +381,7 @@ editors keep writing =,qr=:
 #+begin_src scheme
 (define-module (brand tags) #:use-module (uq parse) #:use-module (uq qr))
 
-(define-tag inline (qr . label) #:attributes attrs #:editor-attributes required
+(define-tag inline (qr . label) #:attributes attrs #:editor-attributes (data)
   (qr-element attrs label #:dark "device-cmyk(1 0.6 0 0.2)"))
 #+end_src
 

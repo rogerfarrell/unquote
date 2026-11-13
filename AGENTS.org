@@ -90,13 +90,14 @@ component modules must be loaded before a document is parsed.
   ='()= where editors cannot write attributes.  =#:attributes var= names
   the list (without it, a non-empty list is an error).
   =#:editor-attributes= decides what editors may write: =#t= (default; no
-  brackets gives ='()=), =required= (the parser rejects a missing or empty
-  bracket with a line number) or =#f= (a bracket is the text).  The
-  registry stores this as =#f=, =optional= or =required=.  The parser
-  cannot check for a particular attribute, so components check the ones
-  they need.  For a
-  command's main value use =main-attribute= (=:key= or the one plain word,
-  with uniform errors), as =link=, =image=, =photo= and =qr= do.
+  brackets gives ='()=), =#f= (a bracket is the text), or a list of
+  required attribute names.  With a list, =required-attributes= checks at
+  parse time, with the line: the first name may be one plain word (the
+  only plain word allowed), the others need their key, and the first is
+  normalised to a =(name "value")= pair.  The registry stores =#f=,
+  =optional= or the list.  Components that also take attributes from
+  Scheme callers use =main-attribute= for the main value (it accepts both
+  forms, with the same messages), as =link=, =image=, =photo= and =qr= do.
 - Attribute commands read =[attributes]= first and an
   optional =[text]= second.  The attribute bracket parses to a list of
   plain-word strings and =(name "value")= pairs; components interpret it.

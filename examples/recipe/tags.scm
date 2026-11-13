@@ -25,7 +25,7 @@
 (define-tag block (recipe . body) `(div (@ (class "recipe")) ,@body))
 (define-tag block:inline (title . body) `(h1 ,@body))
 ;; ,photo[file][alt] or ,photo[file :width 3in][alt]
-(define-tag block:inline (photo . alt) #:attributes attrs #:editor-attributes required
+(define-tag block:inline (photo . alt) #:attributes attrs #:editor-attributes (src)
   `(figure (@ (class "photo"))
      (img (@ (src ,(main-attribute attrs 'src))
              (alt ,(plain alt))

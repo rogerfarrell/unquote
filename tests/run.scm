@@ -62,7 +62,7 @@
 (html ",image[lid.svg][lid icon]" "<p><img src=\"lid.svg\" alt=\"lid icon\" /></p>")
 (html "footnote ,em[one][1]" "<p>footnote <em>one</em>[1]</p>")
 (html ",photo[jar.jpg][A jar]" "<figure class=\"photo\"><img src=\"jar.jpg\" alt=\"A jar\" /></figure>")
-(fails "see ,link here" "line 1: ,link needs attributes: ,link[attributes][text]")
+(fails "see ,link here" "line 1: ,link needs its href: as the first word or as :href")
 
 ;;; Attributes: bare values in order, :key value pairs as attributes
 (html ",link[:href https://example.com :title Sizes][jars]"
@@ -92,14 +92,23 @@
 (define-tag inline (hl . body) #:attributes attrs `(mark (@ ,@(attribute-list attrs)) ,@body))
 (html "a ,hl bright idea\nnext" "<p>a <mark>bright idea</mark> next</p>")
 (html "a ,hl[:class x][bright] idea" "<p>a <mark class=\"x\">bright</mark> idea</p>")
-;; #:editor-attributes required: the parser insists, with a line number
-(fails "a ,link[][text]" "line 1: ,link needs attributes: ,link[attributes][text]")
-(fails "x\n\n,photo A jar" "line 3: ,photo needs attributes: ,photo[attributes][text]")
-(fails ",photo[][A jar]" "line 1: ,photo needs attributes: ,photo[attributes][text]")
-(define-tag block (checklist . body) #:attributes attrs #:editor-attributes required #:wrap li
+;; #:editor-attributes (key …): the parser insists, with a line number
+(fails "a ,link[][text]" "line 1: ,link needs its href: as the first word or as :href")
+(fails "x\n\n,photo A jar" "line 3: ,photo needs its src: as the first word or as :src")
+(fails ",photo[][A jar]" "line 1: ,photo needs its src: as the first word or as :src")
+(define-tag block (checklist . body) #:attributes attrs #:editor-attributes (id) #:wrap li
   `(ul (@ ,@(attribute-list attrs)) ,@body))
 (html ",checklist[:id pack]\n  Jar\n\n  Lid" "<ul id=\"pack\"><li>Jar</li><li>Lid</li></ul>")
-(fails ",checklist\n  Jar" "line 1: ,checklist needs attributes: ,checklist[attributes][text]")
+(fails ",checklist\n  Jar" "line 1: ,checklist needs its id: as the first word or as :id")
+(html ",checklist[pack]\n  Jar" "<ul id=\"pack\"><li>Jar</li></ul>")
+;; the first required attribute reaches the component as a pair either
+;; way; the others must be given by key
+(define-tag inline (seen . body) #:attributes attrs #:editor-attributes (src alt)
+  `(code ,(object->string attrs)))
+(html "a ,seen[pic.jpg :alt Lid]" "<p>a <code>((src &quot;pic.jpg&quot;) (alt &quot;Lid&quot;))</code></p>")
+(html "a ,seen[:alt Lid :src pic.jpg]" "<p>a <code>((alt &quot;Lid&quot;) (src &quot;pic.jpg&quot;))</code></p>")
+(fails "a ,seen[pic.jpg]" "line 1: ,seen needs :alt")
+(fails "a ,seen[pic.jpg Lid]" "line 1: ,seen takes one src; quote it if it has spaces")
 ;; options that conflict are syntax errors
 (for-each
  (lambda (form)
@@ -173,7 +182,7 @@
 (html "a ,whoami[] b" "<p>a <code>whoami</code> b</p>")
 (html "a ,em[,(symbol->string (current-command))] b" "<p>a <em>em</em> b</p>")
 ;; a component that calls another directly: errors name the outer command
-(define-tag inline (email . body) #:attributes attrs #:editor-attributes required (apply link attrs body))
+(define-tag inline (email . body) #:attributes attrs (apply link attrs body))
 (fails "a\n\nb ,email[a b][x]" "line 3: ,email takes one href; quote it if it has spaces")
 (check "main-attribute: an explicit command name still wins"
        (catch #t (lambda () (main-attribute '() 'src 'custom) #f)
@@ -195,8 +204,12 @@
    ((define-tag block (x . b) #:wrap li #:wrap p b) "#:wrap given twice")
    ((define-tag block (x . b) #:attributes a #:attributes c b) "#:attributes given twice")
    ((define-tag block (x . b) #:editor-attributes #f b) "#:editor-attributes needs #:attributes")
-   ((define-tag block (x . b) #:attributes a #:editor-attributes optional b)
-    "#:editor-attributes takes #t, #f or required")
+   ((define-tag block (x . b) #:attributes a #:editor-attributes required b)
+    "#:editor-attributes takes #t, #f or a list of attribute names")
+   ((define-tag block (x . b) #:attributes a #:editor-attributes () b)
+    "#:editor-attributes takes #t, #f or a list of attribute names")
+   ((define-tag block (x . b) #:attributes a #:editor-attributes ("href") b)
+    "#:editor-attributes takes #t, #f or a list of attribute names")
    ((define-tag block (x . b) #:attributes a #:editor-attributes #t #:editor-attributes #f b)
     "#:editor-attributes given twice")
    ((define-tag block (x . b) #:required-attributes a b) "unknown option #:required-attributes")))
@@ -354,7 +367,7 @@
              (remove-attributes '("x.com" (title "a") (rel "r")) '(title rel)))
        '(("x.com" (rel "r") (title "b")) ("x.com")))
 ;; ,offsite: a link that opens in a new tab and is marked external
-(define-tag inline (offsite . body) #:attributes attrs #:editor-attributes required
+(define-tag inline (offsite . body) #:attributes attrs #:editor-attributes (href)
   (add-class (apply link (set-attribute attrs 'target "_blank") body) "external"))
 (html "see ,offsite[https://example.com :target _self][jars]"
       "<p>see <a href=\"https://example.com\" target=\"_blank\" class=\"external\">jars</a></p>")
@@ -469,8 +482,11 @@
 ;;; ,(expr) with non-ASCII text inside
 (html "½ ,(string-append \"é\" \"½\") after" "<p>½ é½ after</p>")
 (check "parse attributes"
-       (strip-line-wrappers (car (markup-string->exprs ",link[a b :x 1 c][t]")))
-       '(p '() (link '("a" "b" (x "1") "c") "t")))
+       (strip-line-wrappers (car (markup-string->exprs ",hl[a b :x 1 c][t]")))
+       '(p '() (hl '("a" "b" (x "1") "c") "t")))
+(check "parse attributes: a required first attribute becomes a pair"
+       (strip-line-wrappers (car (markup-string->exprs ",link[a :x 1][t]")))
+       '(p '() (link '((href "a") (x "1")) "t")))
 
 ;;; block:inline
 (html ",title Cheeseburger\n  Helper" "<h1>Cheeseburger Helper</h1>")
@@ -628,7 +644,7 @@
              (render ",qr[:data https://example.com/r]") (render ",qr[https://example.com/r]"))
       (fails ",qr[x :data y]" "line 1: ,qr: give the data once, as a word or as :data")
       (fails ",qr[WIFI:S:Kitchen Net;;]" "line 1: ,qr takes one data; quote it if it has spaces")
-      (fails ",qr" "line 1: ,qr needs attributes: ,qr[attributes][text]"))
+      (fails ",qr" "line 1: ,qr needs its data: as the first word or as :data"))
     (format #t "skipping (uq qr) tests: Guile-QR-Code is not installed~%"))
 
 (if (zero? failures)
