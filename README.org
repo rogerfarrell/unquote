@@ -445,15 +445,45 @@ once every choice is made.
 
 - A heading without an =id= gets one from its text (=dry-goods=), made
   unique (=ingredients-2=) and different from ids already in the document.
-- Link text is the heading's text without markup.
+- Link text is the heading's =bookmark-label= if it has one (below), and
+  otherwise its text without markup.
 - Headings inside a toc, such as its own title, are not listed.
 - Every =,toc= is filled.  A document without one is left as it is.
+
+** Short names in the table of contents
+A heading can have a shorter name in the table of contents than on the
+page.  The name comes from the CSS property =bookmark-label= (CSS Generated
+Content for Paged Media) in the heading's =style= attribute, which
+WeasyPrint also uses for the PDF's bookmarks, so both show the same name.
+Browsers ignore the property.
+
+A component sets it; =css-string= quotes the text for CSS.  Here the editor
+gives the short name as =:toc=:
+
+#+begin_src scheme
+(define-tag block:inline (chapter . title) #:attributes attrs
+  (let ((short (attribute attrs 'toc)))
+    `(h1 ,@(if short
+               `((@ (style ,(string-append "bookmark-label: " (css-string short)))))
+               '())
+         ,@title)))
+#+end_src
+
+#+begin_example
+,chapter[:toc Prep][Preparing the dough the night before]
+#+end_example
+
+=toc-pass= reads only the =style= attribute, not stylesheets, and only
+values made of strings (='Prep'=, ="Part " "one"=).  For any other value,
+such as =content()= or =attr(title)=, the entry uses the heading's text.
+The heading's generated =id= still comes from its full text.
 
 The utilities: =element?=, =element-tag=, =element-attributes=,
 =element-children=, =element-attribute=, =set-element-attribute=,
 =has-class?=, =element-text=, =map-elements= (rewrite elements, outermost
 first, with an optional =#:skip?=), =find-elements= (collect elements in
-document order) and =slugify=.  Passes are plain functions, so they also
+document order), =slugify=, =css-string= and =element-bookmark-label= (the
+string value of =bookmark-label= in an element's =style=, or =#f=).  Passes are plain functions, so they also
 apply to the output of the =markup= macro.
 
 * Scheme expressions in a document

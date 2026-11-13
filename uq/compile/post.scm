@@ -29,6 +29,7 @@
   #:export (element? element-tag element-attributes element-children
             element-attribute set-element-attribute has-class?
             element-text map-elements find-elements slugify
+            css-string element-bookmark-label
             toc-pass))
 
 ;;; ---------------- SXML utilities ----------------
@@ -102,12 +103,101 @@ inside elements for which SKIP? is true."
          (s (string-join (remove string-null? (string-split s #\-)) "-")))
     (if (string-null? s) "section" s)))
 
+;;; ---------------- bookmark-label ----------------
+;;; The CSS property bookmark-label (CSS GCPM) names an element's PDF
+;;; bookmark; WeasyPrint uses it.  toc-pass reads it from an element's
+;;; style attribute for the entry text, so one label serves both.  Only
+;;; values made of strings are understood; anything else (content(),
+;;; attr(), counters) is left to the caller's fallback.
+
+(define (css-string text)
+  "TEXT as a double-quoted CSS string."
+  (string-append
+   "\""
+   (string-concatenate
+    (map (lambda (c)
+           (case c
+             ((#\\) "\\\\")
+             ((#\") "\\\"")
+             ((#\newline) "\\A ")
+             (else (string c))))
+         (string->list text)))
+   "\""))
+
+(define (style-declarations style)
+  "STYLE (a style attribute) as a list of (name . value) strings, in order.
+Semicolons inside quoted strings or parentheses do not split."
+  (define (declaration str)
+    (let ((colon (string-index str #\:)))
+      (and colon
+           (cons (string-downcase (string-trim-both (substring str 0 colon)))
+                 (string-trim-both (substring str (1+ colon)))))))
+  (let loop ((cs (string->list style)) (quote-char #f) (depth 0) (cur '()) (out '()))
+    (define (flush) (let ((d (declaration (list->string (reverse cur))))) (if d (cons d out) out)))
+    (match cs
+      (() (reverse (flush)))
+      ((#\\ c . rest) (loop rest quote-char depth (cons* c #\\ cur) out))
+      ((c . rest)
+       (cond (quote-char (loop rest (if (eqv? c quote-char) #f quote-char) depth (cons c cur) out))
+             ((memv c '(#\" #\')) (loop rest c depth (cons c cur) out))
+             ((eqv? c #\() (loop rest #f (1+ depth) (cons c cur) out))
+             ((eqv? c #\)) (loop rest #f (max 0 (1- depth)) (cons c cur) out))
+             ((and (eqv? c #\;) (zero? depth)) (loop rest #f 0 '() (flush)))
+             (else (loop rest #f depth (cons c cur) out)))))))
+
+(define (css-strings value)
+  "The text of VALUE if it is only CSS strings (and an optional !important),
+concatenated; otherwise #f."
+  (define (hex? c) (string-index "0123456789abcdefABCDEF" c))
+  (define (read-string cs q)            ; cs after the opening quote -> (text . rest) or #f
+    (let loop ((cs cs) (acc '()))
+      (match cs
+        (() #f)
+        (((? (lambda (c) (eqv? c q))) . rest) (cons (list->string (reverse acc)) rest))
+        ((#\newline . _) #f)
+        ((#\\ #\newline . rest) (loop rest acc))
+        ((#\\ (? hex? h) . rest)
+         (let hexes ((rest rest) (digits (list h)))
+           (match rest
+             (((? hex? h) . more) (=> next) (if (< (length digits) 6) (hexes more (cons h digits)) (next)))
+             (_ (let ((rest (match rest (((? char-whitespace?) . r) r) (_ rest)))
+                      (n (string->number (list->string (reverse digits)) 16)))
+                  (loop rest (cons (if (or (zero? n) (> n #x10FFFF) (<= #xD800 n #xDFFF)) #\xFFFD (integer->char n))
+                                   acc)))))))
+        ((#\\ c . rest) (loop rest (cons c acc)))
+        ((c . rest) (loop rest (cons c acc))))))
+  (let* ((v (string-trim-both value))
+         (v (if (string-suffix-ci? "!important" v)
+                (string-trim-right (string-drop-right v (string-length "!important")))
+                v)))
+    (let loop ((cs (string->list v)) (parts '()))
+      (match cs
+        (() (and (pair? parts) (string-concatenate-reverse parts)))
+        (((? char-whitespace?) . rest) (loop rest parts))
+        (((and q (or #\" #\')) . rest)
+         (match (read-string rest q)
+           ((text . rest) (loop rest (cons text parts)))
+           (#f #f)))
+        (_ #f)))))
+
+(define (element-bookmark-label el)
+  "The bookmark-label in EL's style attribute, if it is made of strings;
+otherwise #f.  The last bookmark-label declaration counts."
+  (let ((style (element-attribute el 'style)))
+    (and style
+         (match (filter (lambda (d) (string=? (car d) "bookmark-label"))
+                        (style-declarations style))
+           (() #f)
+           (decls (css-strings (cdr (last decls))))))))
+
 ;;; ---------------- Table of contents ----------------
 ;;; ,toc (in (uq tags)) renders <nav class="toc"> with an optional title and
 ;;; an empty <ol>.  (toc-pass '(h1 h2)) fills every such <ol> with links to
 ;;; the document's h1 and h2 elements, h2s nested under the h1 before them,
-;;; giving each heading an id from its text if it has none.  Headings inside
-;;; a toc are not listed.  A document without a toc is left as it is.
+;;; giving each heading an id from its text if it has none.  An entry's text
+;;; is the heading's bookmark-label, if its style attribute sets one to
+;;; strings, or else its text.  Headings inside a toc are not listed.  A
+;;; document without a toc is left as it is.
 ;;;
 ;;; Instead of a list of tags, toc-pass takes a procedure, called on each
 ;;; element in document order: #f leaves it out; a number lists it at that
@@ -183,7 +273,7 @@ is the entries accepted so far, most recent first, each (level . element)."
       (((level . el) . rest)
        (let-values (((kids rest) (span (lambda (x) (> (car x) level)) rest)))
          (cons `(li (a (@ (href ,(string-append "#" (element-attribute el 'id))))
-                       ,(string-trim-both (element-text el)))
+                       ,(string-trim-both (or (element-bookmark-label el) (element-text el))))
                     ,@(if (null? kids) '() `((ol ,@(items kids)))))
                (items rest))))))
   (define listed (items entries))
