@@ -305,37 +305,6 @@
                     (toc-pass (lambda (el . rest) (and (eq? (element-tag el) 'h1) (null? (car rest)) 0))))
        "<nav class=\"toc\"><ol><li><a href=\"#a\">A</a></li></ol></nav><h1 id=\"a\">A</h1><h1>B</h1>")
 
-;; bookmark-label: an entry's text, from the heading's style attribute
-(define-tag block:inline (chapter . b) #:attributes attrs
-  (let ((label (attribute attrs 'toc)))
-    `(h1 ,@(if label `((@ (style ,(string-append "bookmark-label: " (css-string label))))) '()) ,@b)))
-(check "toc-pass: bookmark-label names the entry; the id still comes from the text"
-       (render-post ",toc\n\n,chapter[:toc Prep][Preparing the dough the night before]\n,chapter Baking" toc2)
-       (string-append "<nav class=\"toc\"><ol><li><a href=\"#preparing-the-dough-the-night-before\">Prep</a></li>"
-                      "<li><a href=\"#baking\">Baking</a></li></ol></nav>"
-                      "<h1 style=\"bookmark-label: &quot;Prep&quot;\" id=\"preparing-the-dough-the-night-before\">Preparing the dough the night before</h1>"
-                      "<h1 id=\"baking\">Baking</h1>"))
-(check "toc-pass: a quoted label with quotes and a backslash round-trips"
-       (render-post ",toc\n\n,chapter[:toc \"say \\\"hi\\\" \\\\ now\"][Long]" toc2)
-       (string-append "<nav class=\"toc\"><ol><li><a href=\"#long\">say &quot;hi&quot; \\ now</a></li></ol></nav>"
-                      "<h1 style=\"bookmark-label: &quot;say \\&quot;hi\\&quot; \\\\ now&quot;\" id=\"long\">Long</h1>"))
-(check "element-bookmark-label: strings only, last declaration wins, else #f"
-       (map (lambda (style) (element-bookmark-label `(h1 (@ (style ,style)) "x")))
-            '("bookmark-label: \"Prep\""
-              "color: red; Bookmark-Label: 'a;b' \"c\" !important"
-              "bookmark-label: \"A\"; bookmark-label: \"B\""
-              "bookmark-label: \"caf\\e9  x\""
-              "background: url(a;b); bookmark-label: \"ok\""
-              "bookmark-label: content()"
-              "bookmark-label: attr(title)"
-              "bookmark-label: \"open"
-              "color: red"))
-       '("Prep" "a;bc" "B" "café x" "ok" #f #f #f #f))
-(check "toc-pass: a bookmark-label that is not strings falls back to the text"
-       (render-post ",toc\n\n,(quote (h1 (@ (style \"bookmark-label: content()\")) \"Text\"))" toc2)
-       (string-append "<nav class=\"toc\"><ol><li><a href=\"#text\">Text</a></li></ol></nav>"
-                      "<p><h1 style=\"bookmark-label: content()\" id=\"text\">Text</h1></p>"))
-
 (check "slugify" (map slugify '("Dry goods" "Crème brûlée!" "  " "3 Steps")) '("dry-goods" "crème-brûlée" "section" "3-steps"))
 
 ;;; Quoted attribute values

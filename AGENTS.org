@@ -163,12 +163,6 @@ component modules must be loaded before a document is parsed.
   (=(toc-pass '(h1 h2))=); never write instructions for a pass into the
   SXML, and never register passes.  Components stay lexical: they see only
   their own contents.
-- A toc entry's text is the element's =bookmark-label= (CSS GCPM) from its
-  =style= attribute, so the PDF bookmark (WeasyPrint) and the toc agree.
-  This is a standard CSS property, not an instruction to the pass.  Only
-  string values are read; anything else falls back to the element's text.
-  Check changes against WeasyPrint's bookmark tree
-  (=HTML(...).render().make_bookmark_tree()=).
 - Components return SXML.  =sxml->xml= writes empty elements as =<x />=,
   which browsers read as an open tag for non-void elements; =write-sxml=
   therefore closes empty non-void elements (=<td></td>=).  Write HTML
