@@ -9,6 +9,8 @@
              (ice-9 match) (srfi srfi-1))
 (set-port-encoding! (current-output-port) "UTF-8")
 
+(use-modules (ice-9 match))
+
 (define (render str)
   (with-output-to-string
     (lambda () (write-sxml (eval `(list ,@(markup-string->exprs str))
@@ -177,6 +179,22 @@
        (catch #t (lambda () (main-attribute '() 'src 'custom) #f)
          (lambda (k . a) (uq-error-message k a)))
        ",custom needs its src: as the first word or as :src")
+
+;;; define-tag reports bad options by name
+(for-each
+ (match-lambda
+   ((form want)
+    (check (format #f "define-tag error for ~s" (cdddr form))
+           (catch #t (lambda () (eval form (current-module)) #f)
+             (lambda (k . a) (let ((m (uq-error-message k a))) (and (string-prefix? want m) want))))
+           want)))
+ '(((define-tag block (x . b) #:wrapp li b) "unknown option #:wrapp")
+   ((define-tag block (x . b) #:wrap) "#:wrap needs a value")
+   ((define-tag block (x . b) #:wrap li) "x has no body")
+   ((define-tag inline (x . b) #:attributes "a" b) "#:attributes takes a variable name")
+   ((define-tag block (x . b) #:wrap li #:wrap p b) "#:wrap given twice")
+   ((define-tag block (x . b) #:attributes a #:required-attributes c b)
+    "only one of #:attributes and #:required-attributes")))
 
 ;;; Quoted attribute values
 (html ",link[https://example.com :title \"Jar sizes for every recipe\"][jars]"

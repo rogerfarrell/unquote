@@ -104,34 +104,39 @@
 ;;     (let ((href (main-attribute attrs 'href)))
 ;;       `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
-  (syntax-rules ()
-    ((_ kind (name . body) . rest)
-     (define-tag/options kind name body 0 #f #f #f rest))))   ; 0: no #:wrap given
-
-;; Collects the options, then defines.  W: the #:wrap value, or 0; A: the attribute
-;; variable or #f; M: optional, required or #f; D: default wrapper?
-(define-syntax define-tag/options
-  (syntax-rules ()
-    ((_ k n b w #f m d (#:attributes a . rest))
-     (define-tag/options k n b w a optional d rest))
-    ((_ k n b w #f m d (#:required-attributes a . rest))
-     (define-tag/options k n b w a required d rest))
-    ((_ k n b w a m d (#:attributes . rest))
-     (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
-    ((_ k n b w a m d (#:required-attributes . rest))
-     (syntax-error "define-tag: only one of #:attributes and #:required-attributes" n))
-    ((_ k n b 0 a m d (#:wrap w . rest))
-     (define-tag/options k n b w a m d rest))
-    ((_ k n b w a m d (#:wrap . rest))
-     (syntax-error "define-tag: #:wrap given twice" n))
-    ((_ k n b w a m #f (#:default-wrap d . rest))
-     (define-tag/options k n b w a m d rest))
-    ((_ k n b w a m d (#:default-wrap . rest))
-     (syntax-error "define-tag: #:default-wrap given twice" n))
-    ((_ k n b w #f m d (expr ...))
-     (begin (define (n . b) expr ...) (export n) (register! 'n 'k 'm 'w d)))
-    ((_ k n b w a m d (expr ...))
-     (begin (define (n a . b) expr ...) (export n) (register! 'n 'k 'm 'w d)))))
+  (lambda (x)
+    (define (fail message form . args)
+      (syntax-violation 'define-tag (apply format #f message args) x form))
+    (syntax-case x ()
+      ((_ kind (name . body) . rest)
+       ;; Walk the options; the rest is the body.  WRAP stays 0 until
+       ;; #:wrap is seen (#f is a valid value: no wrapper).
+       (let loop ((rest #'rest) (wrap 0) (attrs #f) (mode #f) (default #f))
+         (syntax-case rest ()
+           ((kw . more) (keyword? (syntax->datum #'kw))
+            (let ((key (syntax->datum #'kw)))
+              (syntax-case #'more ()
+                ((value . more)
+                 (case key
+                   ((#:wrap)
+                    (unless (eqv? wrap 0) (fail "~a given twice" #'kw key))
+                    (loop #'more (syntax->datum #'value) attrs mode default))
+                   ((#:attributes #:required-attributes)
+                    (when attrs (fail "only one of #:attributes and #:required-attributes" #'kw))
+                    (unless (identifier? #'value) (fail "~a takes a variable name" #'value key))
+                    (loop #'more wrap #'value (if (eq? key #:attributes) 'optional 'required) default))
+                   ((#:default-wrap)
+                    (when default (fail "~a given twice" #'kw key))
+                    (loop #'more wrap attrs mode (syntax->datum #'value)))
+                   (else (fail "unknown option ~a" #'kw key))))
+                (() (fail "~a needs a value" #'kw key)))))
+           (() (fail "~a has no body" #'name (syntax->datum #'name)))
+           ((expr ...)
+            #`(begin
+                (define (name #,@(if attrs (list attrs) '()) . body) expr ...)
+                (export name)
+                (register! 'name 'kind '#,(datum->syntax x mode) '#,(datum->syntax x wrap)
+                           #,(datum->syntax x default))))))))))
 
 ;;; ================= Errors =================
 ;; Every error that knows its line is raised under the key uq-error, as
