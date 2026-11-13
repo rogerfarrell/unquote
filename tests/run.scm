@@ -284,7 +284,10 @@
                                 (case (element-tag el)
                                   ((h1) 0)
                                   ((h2) (let ((chapter (find (lambda (e) (= (car e) 0)) prior)))
-                                          (and chapter (string-prefix? "Ingredients" (element-text (cdr chapter))) 1)))
+                                          (if (and chapter
+                                                   (string-prefix? "Ingredients" (element-text (cdr chapter))))
+                                              1
+                                              #f)))
                                   (else #f)))))
        (string-append "<nav class=\"toc\"><ol><li><a href=\"#ingredients\">Ingredients</a><ol><li><a href=\"#dry\">Dry</a></li></ol></li>"
                       "<li><a href=\"#directions\">Directions</a></li></ol></nav>"

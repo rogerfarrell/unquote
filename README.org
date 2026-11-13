@@ -433,9 +433,10 @@ order.  To list =h2=s only under chapters whose title starts with
             (case (element-tag el)
               ((h1) 0)
               ((h2) (let ((chapter (find (lambda (e) (= (car e) 0)) prior)))
-                      (and chapter
-                           (string-prefix? "Ingredients" (element-text (cdr chapter)))
-                           1)))
+                      (if (and chapter
+                               (string-prefix? "Ingredients" (element-text (cdr chapter))))
+                          1
+                          #f)))
               (else #f))))
 #+end_src
 
