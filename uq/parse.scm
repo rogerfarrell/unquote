@@ -23,7 +23,8 @@
             at-line strip-line-wrappers uq-error-message))
 
 ;;; ================= Component registry =================
-;; name -> (kind attributes wrap), attributes being #f, optional or required
+;; name -> (kind attributes wrap), attributes being what editors may write:
+;; #f, optional or required (from #:editor-attributes)
 ;; Kinds are  placement:content.
 ;;   block:block   (alias block)   starts a line; holds blank-line-separated groups,
 ;;                                 each wrapped per the tag's #:wrap, else the
@@ -93,15 +94,19 @@
 ;;   #:default-wrap #t          this block tag wraps loose text wherever no
 ;;                              #:wrap says otherwise, including the top
 ;;                              level of a document; (uq tags) declares p
-;;   #:attributes var           the command may take [attributes][text]; the
-;;                              brackets can be left out, giving no attributes
-;;   #:required-attributes var  the same, but the attribute bracket must be
-;;                              there and not empty; the parser says so,
-;;                              with a line number
-;; With either attributes option, VAR is bound to the attribute list (see
-;; parse-attributes) and BODY is the text -- or, for a block, its contents.
+;;   #:attributes var           names the attribute list (see parse-attributes);
+;;                              without it, the component takes none
+;;   #:editor-attributes #t     editors may write [attributes][text]; the
+;;                              brackets can be left out, giving none (default)
+;;   #:editor-attributes required  the attribute bracket must be there and
+;;                              not empty; the parser says so, with a line
+;;   #:editor-attributes #f     only Scheme callers pass attributes; for
+;;                              editors a bracket is the text, as without
+;;                              #:attributes
+;; Every component is called as (name attrs . body), BODY being the text --
+;; or, for a block, its contents.  Without #:attributes, ATTRS must be '().
 ;; For example:
-;;   (define-tag inline (link . body) #:required-attributes attrs
+;;   (define-tag inline (link . body) #:attributes attrs #:editor-attributes required
 ;;     (let ((href (main-attribute attrs 'href)))
 ;;       `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 (define-syntax define-tag
@@ -110,9 +115,9 @@
       (syntax-violation 'define-tag (apply format #f message args) x form))
     (syntax-case x ()
       ((_ kind (name . body) . rest)
-       ;; Walk the options; the rest is the body.  WRAP stays 0 until
-       ;; #:wrap is seen (#f is a valid value: no wrapper).
-       (let loop ((rest #'rest) (wrap 0) (attrs #f) (mode #f) (default #f))
+       ;; Walk the options; the rest is the body.  WRAP and EDITOR stay 0
+       ;; until given (#f is a valid value for both).
+       (let loop ((rest #'rest) (wrap 0) (attrs #f) (editor 0) (default #f))
          (syntax-case rest ()
            ((kw . more) (keyword? (syntax->datum #'kw))
             (let ((key (syntax->datum #'kw)))
@@ -121,23 +126,43 @@
                  (case key
                    ((#:wrap)
                     (unless (eqv? wrap 0) (fail "~a given twice" #'kw key))
-                    (loop #'more (syntax->datum #'value) attrs mode default))
-                   ((#:attributes #:required-attributes)
-                    (when attrs (fail "only one of #:attributes and #:required-attributes" #'kw))
+                    (loop #'more (syntax->datum #'value) attrs editor default))
+                   ((#:attributes)
+                    (when attrs (fail "~a given twice" #'kw key))
                     (unless (identifier? #'value) (fail "~a takes a variable name" #'value key))
-                    (loop #'more wrap #'value (if (eq? key #:attributes) 'optional 'required) default))
+                    (loop #'more wrap #'value editor default))
+                   ((#:editor-attributes)
+                    (unless (eqv? editor 0) (fail "~a given twice" #'kw key))
+                    (unless (memq (syntax->datum #'value) '(#t #f required))
+                      (fail "~a takes #t, #f or required" #'value key))
+                    (loop #'more wrap attrs (syntax->datum #'value) default))
                    ((#:default-wrap)
                     (when default (fail "~a given twice" #'kw key))
-                    (loop #'more wrap attrs mode (syntax->datum #'value)))
+                    (loop #'more wrap attrs editor (syntax->datum #'value)))
                    (else (fail "unknown option ~a" #'kw key))))
                 (() (fail "~a needs a value" #'kw key)))))
            (() (fail "~a has no body" #'name (syntax->datum #'name)))
            ((expr ...)
-            #`(begin
-                (define (name #,@(if attrs (list attrs) '()) . body) expr ...)
-                (export name)
-                (register! 'name 'kind '#,(datum->syntax x mode) '#,(datum->syntax x wrap)
-                           #,(datum->syntax x default))))))))))
+            (begin
+              (when (and (not attrs) (not (eqv? editor 0)))
+                (fail "#:editor-attributes needs #:attributes" #'name))
+              ;; what the parser lets editors write: #f, optional or required
+              (let ((mode (cond ((not attrs) #f)
+                                ((eqv? editor 0) 'optional)
+                                ((eq? editor #t) 'optional)
+                                (else editor))))
+                (with-syntax (((param) (if attrs (list attrs) (generate-temporaries '(attrs)))))
+                  #`(begin
+                      (define (name param . body)
+                        #,@(if attrs
+                               #'()
+                               #'((unless (null? param)
+                                    (error (format #f "~a takes no attributes; call it as (~a '() body ...), not with ~s"
+                                                   'name 'name param)))))
+                        (let () expr ...))
+                      (export name)
+                      (register! 'name 'kind '#,(datum->syntax x mode) '#,(datum->syntax x wrap)
+                                 #,(datum->syntax x default)))))))))))))
 
 ;;; ================= Errors =================
 ;; Every error that knows its line is raised under the key uq-error, as
@@ -411,9 +436,10 @@ while evaluating, so it carries the line."
 (define (name-end s i) (let scan ((j i)) (if (and (< j (string-length s)) (name-char? (string-ref s j))) (scan (1+ j)) j)))
 (define (nl->sp str) (string-map (lambda (c) (if (char=? c #\newline) #\space c)) str))
 (define (line-at s i line) (+ line (string-count (substring s 0 i) #\newline)))
-;; ATTRS is #f for commands without attributes; otherwise a quoted list.
+;; ATTRS is a list, or #f where editors cannot write attributes.  Every
+;; component takes its attributes first, so #f passes '().
 (define (call name attrs parts line)
-  (wrap-line line `(,name ,@(if attrs `(',attrs) '()) ,@parts) name))
+  (wrap-line line `(,name ',(or attrs '()) ,@parts) name))
 
 (define (parse-inline s line)
   (let loop ((i 0) (start 0) (acc '()))
@@ -621,7 +647,7 @@ on in FILE, so errors name the file and its lines."
                       (default-wraps))))
 
 ;; (markup "…")  expands at compile time into ordinary Scheme:
-;;   (list (p "text " (em "x")) (ul (li …)) …)
+;;   (list (p '() "text " (em '() "x")) (ul '() (li '() …)) …)
 ;; datum->syntax with the use site's context, so components and any
 ;; ,(expr) escapes resolve in the module/scope where markup is written.
 ;; Errors name the Scheme file and its lines: the string's own source line

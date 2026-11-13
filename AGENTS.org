@@ -85,11 +85,16 @@ component modules must be loaded before a document is parsed.
   =unset=, =inline= or a list; =wrap-of= turns =unset= into the default.
   Wraps do not cascade: an implicit wrapper gets the group's content
   directly, without applying its own =#:wrap=.
-  =#:wrap= combines with either attributes option, in any order.
-- =#:attributes var=: optional; without brackets the command gets ='()=,
-  inline or block.  =#:required-attributes var=: the parser rejects a
-  missing or empty bracket with a line number.  It cannot check for a
-  particular attribute, so components check the ones they need.  For a
+  =#:wrap= combines with the attributes options, in any order.
+- Every component is called as =(name attrs . body)=; the parser passes
+  ='()= where editors cannot write attributes.  =#:attributes var= names
+  the list (without it, a non-empty list is an error).
+  =#:editor-attributes= decides what editors may write: =#t= (default; no
+  brackets gives ='()=), =required= (the parser rejects a missing or empty
+  bracket with a line number) or =#f= (a bracket is the text).  The
+  registry stores this as =#f=, =optional= or =required=.  The parser
+  cannot check for a particular attribute, so components check the ones
+  they need.  For a
   command's main value use =main-attribute= (=:key= or the one plain word,
   with uniform errors), as =link=, =image=, =photo= and =qr= do.
 - Attribute commands read =[attributes]= first and an

@@ -70,12 +70,12 @@
 (define-tag inline (em . body)     `(em ,@body))
 (define-tag inline (strong . body) `(strong ,@body))
 ;; ,link[url][text] or ,link[:href url :title Hint][text]; no text shows the URL
-(define-tag inline (link . body) #:required-attributes attrs
+(define-tag inline (link . body) #:attributes attrs #:editor-attributes required
   (let ((href (main-attribute attrs 'href)))
     `(a (@ (href ,href) ,@(attribute-list attrs '(href)))
         ,@(if (null? body) (list href) body))))
 ;; ,image[file][alt] or ,image[:src file :width 40][alt]
-(define-tag inline (image . alt) #:required-attributes attrs
+(define-tag inline (image . alt) #:attributes attrs #:editor-attributes required
   `(img (@ (src ,(main-attribute attrs 'src)) (alt ,(plain alt))
            ,@(attribute-list attrs '(src alt)))))
 (define-tag word (frac . body)

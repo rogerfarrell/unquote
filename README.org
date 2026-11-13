@@ -192,7 +192,9 @@ defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
 =ingredients=, =directions= and =tip=.
 
 Each component is a procedure returning SXML, registered with a kind.
-=define-tag= also exports it from the module it appears in.
+=define-tag= also exports it from the module it appears in.  Every
+component is called with its attributes first, =(name attrs body …)=;
+one declared without =#:attributes= takes ='()=.
 
 | kind                    | placement   | content                                                     |
 |-------------------------+-------------+-------------------------------------------------------------|
@@ -207,18 +209,29 @@ Each component is a procedure returning SXML, registered with a kind.
 (define-tag block        (ul . body) #:wrap li `(ul ,@body))
 (define-tag block        (li . body)    `(li ,@body))
 (define-tag inline       (em . body)    `(em ,@body))
-(define-tag inline       (link . body) #:required-attributes attrs
+(define-tag inline       (link . body) #:attributes attrs #:editor-attributes required
   (let ((href (main-attribute attrs 'href)))         ; :href or the one plain word
     `(a (@ (href ,href) ,@(attribute-list attrs '(href))) ,@body)))
 #+end_src
 
-=#:attributes var= lets a command take =[attributes][text]=; the brackets
-may be left out, giving no attributes.  =#:required-attributes var= is the
-same, except that the attribute bracket must be there and not empty: the
-parser reports =line N: ,link needs attributes: …= otherwise.  It cannot
-know /which/ attribute is needed, so a component that needs a particular
-one checks for it, usually with =main-attribute=.  In both cases =var= is
-bound to the attribute bracket as a list: plain words as strings, in order,
+=#:attributes var= names the component's attributes, and lets editors write
+=[attributes][text]=; the brackets may be left out, giving no attributes.
+=#:editor-attributes= says what editors may write:
+
+| =#:editor-attributes= | editors write                                                  |
+|-----------------------+----------------------------------------------------------------|
+| =#t= (the default)    | =,name[attributes][text]=, or no brackets for none             |
+| =required=            | the attribute bracket, not empty                               |
+| =#f=                  | no attributes: a bracket is the text, as for =,em[…]=           |
+
+With =required=, the parser reports =line N: ,link needs attributes: …=
+when the bracket is missing or empty.  It cannot know /which/ attribute is
+needed, so a component that needs a particular one checks for it, usually
+with =main-attribute=.  With =#f=, only Scheme callers pass attributes: a
+component other components build on, but that editors use plainly.  A
+component without =#:attributes= raises an error if a caller passes any.
+
+=var= is bound to the attributes as a list: plain words as strings, in order,
 and =:name value= pairs as =(name "value")=, ready to splice into an SXML
 =(@ …)=.  So =[jar.jpg :width 3in]= gives =("jar.jpg" (width "3in"))=, and
 =body= is the text.  Helpers from =(uq parse)=:
@@ -243,9 +256,8 @@ and =:name value= pairs as =(name "value")=, ready to splice into an SXML
   to another component.
 
 ** Building on other components
-A component is an ordinary procedure, called as =(name attrs body …)= if it
-takes attributes and =(name body …)= if not, so one component can call
-another and adjust what it returns.  =(uq sxml)= has helpers for changing
+A component is an ordinary procedure, always called as =(name attrs body
+…)=, so one component can call another and adjust what it returns.  =(uq sxml)= has helpers for changing
 elements: =add-class=, =set-element-attribute=, =remove-element-attribute=,
 =element-attribute=, =has-class?= and the rest listed under
 post-processing.  A link that opens in a new tab and is marked external:
@@ -253,7 +265,7 @@ post-processing.  A link that opens in a new tab and is marked external:
 #+begin_src scheme
 (use-modules (uq parse) (uq tags) (uq sxml))
 
-(define-tag inline (offsite . body) #:required-attributes attrs
+(define-tag inline (offsite . body) #:attributes attrs #:editor-attributes required
   (add-class (apply link (set-attribute attrs 'target "_blank") body) "external"))
 #+end_src
 
@@ -261,7 +273,17 @@ post-processing.  A link that opens in a new tab and is marked external:
 ,offsite[https://example.com][Jar sizes]
 #+end_example
 
-Errors from =link= name =,offsite=, the command the editor wrote.  The
+Errors from =link= name =,offsite=, the command the editor wrote.
+
+A heading that takes a class from other components but not from editors,
+and a =,part= built on it:
+
+#+begin_src scheme
+(define-tag block:inline (heading . title) #:attributes attrs #:editor-attributes #f
+  `(h2 (@ ,@(attribute-list attrs)) ,@title))
+(define-tag block:inline (part . title)
+  (apply heading '((class "part")) title))
+#+end_src  The
 outer declaration is its own: =,offsite= states its kind and attributes
 rather than inheriting =link='s.
 
@@ -352,7 +374,7 @@ editors keep writing =,qr=:
 #+begin_src scheme
 (define-module (brand tags) #:use-module (uq parse) #:use-module (uq qr))
 
-(define-tag inline (qr . label) #:required-attributes attrs
+(define-tag inline (qr . label) #:attributes attrs #:editor-attributes required
   (qr-element attrs label #:dark "device-cmyk(1 0.6 0 0.2)"))
 #+end_src
 
@@ -527,11 +549,11 @@ evaluated.
 |-------------------------------------+-----------------------------------------------|
 | a string                            | text, escaped                                 |
 | a number                            | its printed form                              |
-| an SXML element, or a list of nodes | markup: =,(em "x")=, =,(quote (b "x"))=        |
+| an SXML element, or a list of nodes | markup: =,(em '() "x")=, =,(quote (b "x"))=    |
 | =#f=                                | nothing                                       |
 | anything else                       | its printed form, e.g. =#<unspecified>=: avoid |
 
-Calling a component directly, as in =,(em "x")=, bypasses the parser's
+Calling a component directly, as in =,(em '() "x")=, bypasses the parser's
 rules: =,(ul …)= in the middle of a paragraph produces a =<ul>= inside a
 =<p>=, which is invalid HTML.  Use markup for structure.
 

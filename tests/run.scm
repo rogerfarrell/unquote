@@ -92,11 +92,11 @@
 (define-tag inline (hl . body) #:attributes attrs `(mark (@ ,@(attribute-list attrs)) ,@body))
 (html "a ,hl bright idea\nnext" "<p>a <mark>bright idea</mark> next</p>")
 (html "a ,hl[:class x][bright] idea" "<p>a <mark class=\"x\">bright</mark> idea</p>")
-;; #:required-attributes: the parser insists, with a line number
+;; #:editor-attributes required: the parser insists, with a line number
 (fails "a ,link[][text]" "line 1: ,link needs attributes: ,link[attributes][text]")
 (fails "x\n\n,photo A jar" "line 3: ,photo needs attributes: ,photo[attributes][text]")
 (fails ",photo[][A jar]" "line 1: ,photo needs attributes: ,photo[attributes][text]")
-(define-tag block (checklist . body) #:required-attributes attrs #:wrap li
+(define-tag block (checklist . body) #:attributes attrs #:editor-attributes required #:wrap li
   `(ul (@ ,@(attribute-list attrs)) ,@body))
 (html ",checklist[:id pack]\n  Jar\n\n  Lid" "<ul id=\"pack\"><li>Jar</li><li>Lid</li></ul>")
 (fails ",checklist\n  Jar" "line 1: ,checklist needs attributes: ,checklist[attributes][text]")
@@ -106,7 +106,7 @@
    (check (format #f "define-tag rejects ~s" (cddr form))
           (catch #t (lambda () (eval form (current-module)) #f) (lambda _ #t))
           #t))
- '((define-tag block (x . b) #:attributes a #:required-attributes c b)
+ '((define-tag block (x . b) #:attributes a #:attributes c b)
    (define-tag block (x . b) #:wrap li #:wrap p b)))
 
 ;;; The default wrapper is declared (#:default-wrap), not built in
@@ -173,7 +173,7 @@
 (html "a ,whoami[] b" "<p>a <code>whoami</code> b</p>")
 (html "a ,em[,(symbol->string (current-command))] b" "<p>a <em>em</em> b</p>")
 ;; a component that calls another directly: errors name the outer command
-(define-tag inline (email . body) #:required-attributes attrs (apply link attrs body))
+(define-tag inline (email . body) #:attributes attrs #:editor-attributes required (apply link attrs body))
 (fails "a\n\nb ,email[a b][x]" "line 3: ,email takes one href; quote it if it has spaces")
 (check "main-attribute: an explicit command name still wins"
        (catch #t (lambda () (main-attribute '() 'src 'custom) #f)
@@ -193,8 +193,30 @@
    ((define-tag block (x . b) #:wrap li) "x has no body")
    ((define-tag inline (x . b) #:attributes "a" b) "#:attributes takes a variable name")
    ((define-tag block (x . b) #:wrap li #:wrap p b) "#:wrap given twice")
-   ((define-tag block (x . b) #:attributes a #:required-attributes c b)
-    "only one of #:attributes and #:required-attributes")))
+   ((define-tag block (x . b) #:attributes a #:attributes c b) "#:attributes given twice")
+   ((define-tag block (x . b) #:editor-attributes #f b) "#:editor-attributes needs #:attributes")
+   ((define-tag block (x . b) #:attributes a #:editor-attributes optional b)
+    "#:editor-attributes takes #t, #f or required")
+   ((define-tag block (x . b) #:attributes a #:editor-attributes #t #:editor-attributes #f b)
+    "#:editor-attributes given twice")
+   ((define-tag block (x . b) #:required-attributes a b) "unknown option #:required-attributes")))
+
+;;; every component takes its attributes first; #:editor-attributes says
+;;; what editors may write
+(check "a component without #:attributes is called with '()" (em '() "x") '(em "x"))
+(check "a component without #:attributes rejects attributes"
+       (catch #t (lambda () (em '((class "x")) "y") #f) (lambda (k . a) (uq-error-message k a)))
+       "em takes no attributes; call it as (em '() body ...), not with ((class \"x\"))")
+;; #:editor-attributes #f: Scheme callers pass attributes; for editors a
+;; bracket is the text
+(define-tag block:inline (heading . title) #:attributes attrs #:editor-attributes #f
+  `(h2 (@ ,@(attribute-list attrs)) ,@title))
+(define-tag block:inline (part . title) (apply heading '((class "part")) title))
+(html ",part One" "<h2 class=\"part\">One</h2>")
+(html ",heading Two" "<h2>Two</h2>")
+(html ",heading[:class x]" "<h2>:class x</h2>")
+(define-tag inline (hl2 . body) #:attributes attrs #:editor-attributes #t `(mark (@ ,@(attribute-list attrs)) ,@body))
+(html "a ,hl2[:class x][b] c ,hl2 d" "<p>a <mark class=\"x\">b</mark> c <mark>d</mark></p>")
 
 ;;; ,toc and (uq compile post)
 (use-modules (uq compile post))
@@ -332,7 +354,7 @@
              (remove-attributes '("x.com" (title "a") (rel "r")) '(title rel)))
        '(("x.com" (rel "r") (title "b")) ("x.com")))
 ;; ,offsite: a link that opens in a new tab and is marked external
-(define-tag inline (offsite . body) #:required-attributes attrs
+(define-tag inline (offsite . body) #:attributes attrs #:editor-attributes required
   (add-class (apply link (set-attribute attrs 'target "_blank") body) "external"))
 (html "see ,offsite[https://example.com :target _self][jars]"
       "<p>see <a href=\"https://example.com\" target=\"_blank\" class=\"external\">jars</a></p>")
@@ -365,7 +387,7 @@
 ;;; ,(expr) escapes
 (html "Total: ,(+ 2 3) items" "<p>Total: 5 items</p>")
 (html "x ,(> 1 2) y" "<p>x  y</p>")
-(html "See ,(em \"this\") and ,(quote (b \"that\"))" "<p>See <em>this</em> and <b>that</b></p>")
+(html "See ,(em '() \"this\") and ,(quote (b \"that\"))" "<p>See <em>this</em> and <b>that</b></p>")
 (html "x ,em[a ,(string-append \"]\" \"[\") c] y" "<p>x <em>a ][ c</em> y</p>")
 (html "x ,(string-append \"a\"\n  \"b\") y" "<p>x ab y</p>")
 (fails "Some text.\n\nx ,(string-append \"a\" y" "line 3: ,( is not a complete Scheme expression (unbalanced parentheses?)")
@@ -389,7 +411,7 @@
 (fails-at ",tip\n  a ,em[x\n  y ,(vector-ref (vector) 0)]" "line 3: ")
 (check "strip-line-wrappers shows the plain expression"
        (map strip-line-wrappers (markup-string->exprs "a ,em[b] ,(+ 1 2)"))
-       '((p "a " (em "b") " " (+ 1 2))))
+       '((p '() "a " (em '() "b") " " (+ 1 2))))
 
 ;;; .uq files are UTF-8 whatever the locale (the tests may run under C)
 (let* ((dir  (string-append (or (getenv "TMPDIR") "/tmp") "/uq-utf8-" (number->string (getpid))))
@@ -448,7 +470,7 @@
 (html "½ ,(string-append \"é\" \"½\") after" "<p>½ é½ after</p>")
 (check "parse attributes"
        (strip-line-wrappers (car (markup-string->exprs ",link[a b :x 1 c][t]")))
-       '(p (link '("a" "b" (x "1") "c") "t")))
+       '(p '() (link '("a" "b" (x "1") "c") "t")))
 
 ;;; block:inline
 (html ",title Cheeseburger\n  Helper" "<h1>Cheeseburger Helper</h1>")
