@@ -69,6 +69,7 @@
 ;;; inline
 (define-tag inline (em . body)     `(em ,@body))
 (define-tag inline (strong . body) `(strong ,@body))
+(define-tag inline (u . body)      `(u ,@body))
 ;; ,link[url][text] or ,link[:href url :title Hint][text]; no text shows the URL
 (define-tag inline (link . body) #:attributes attrs #:editor-attributes (href)
   (let ((href (main-attribute attrs 'href)))

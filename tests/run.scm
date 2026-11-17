@@ -48,6 +48,7 @@
 ;; brackets are the way to leave punctuation outside
 (html "add ,frac[1/2], then stir" "<p>add ½, then stir</p>")
 (html "use ,strong[salt]. Then" "<p>use <strong>salt</strong>. Then</p>")
+(html "a ,u[sic] word and ,u one" "<p>a <u>sic</u> word and <u>one</u></p>")
 
 ;;; Brackets
 (html "a ,em[x [y] z] w" "<p>a <em>x [y] z</em> w</p>")

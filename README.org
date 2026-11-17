@@ -186,7 +186,7 @@ component definitions.  =:name value= is there for the occasional case.
 
 =(uq tags)= provides the generic components: =p=, =ul=, =ol=, =li=,
 =table=, =tr=, =td=, =th=, =columns=, =column=, =toc=, =em=, =strong=,
-=link=, =image= and =frac=.  Anything specific to a
+=u=, =link=, =image= and =frac=.  Anything specific to a
 kind of page goes in a module of its own; =examples/recipe/tags.scm=
 defines =(recipe tags)= with =recipe=, =title=, =photo=, =yield=, =prep=,
 =ingredients=, =directions= and =tip=.
